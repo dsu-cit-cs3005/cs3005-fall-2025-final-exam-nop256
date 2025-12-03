@@ -173,7 +173,7 @@ public:
 };
 
 // Factory function to create Robot_Flame_e_o
-extern "C" RobotBase* create_robot() 
+extern "C" RobotBase* create_robot_flame() 
 {
     return new Robot_Flame_e_o();
 }

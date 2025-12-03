@@ -1,0 +1,40 @@
+#include "Arena.h"
+#include "RobotBase.h"
+
+extern "C" RobotBase* create_robot(); // from Robot_Sweeper.cpp
+extern "C" RobotBase* create_robot_rat(); 
+extern "C" RobotBase* create_robot_flame(); 
+int main(){
+    Arena arena(20,20);
+
+// randomly place robots
+// make sure robots don't land on obstacles when it starts
+    RobotBase* sweeper=create_robot();
+    arena.addRobot(sweeper,"Sweeper_1",'1',/*row*/19,/*col*/0);
+    RobotBase* sweeper2=create_robot();
+    // A second sweeper to prove symmetry
+    arena.addRobot(sweeper2,"Sweeper_2",'2',/*row*/0,/*col*/19);
+    RobotBase* sweeper3=create_robot();
+    // A third sweeper to prove symmetry
+    arena.addRobot(sweeper3,"Sweeper_5",'5',/*row*/3,/*col*/13);
+    RobotBase* flame=create_robot_flame();
+    arena.addRobot(flame,"flame_3",'3',/*row*/10,/*col*/10); 
+    RobotBase* flame2=create_robot_flame();
+    // A second flamebot to prove symmetry
+    arena.addRobot(flame2,"flame_4",'4',/*row*/15,/*col*/10); 
+    RobotBase* flame3=create_robot_flame();
+    arena.addRobot(flame3,"flame_6",'6',/*row*/10,/*col*/10); 
+    RobotBase* flame4=create_robot_flame();
+    // A second flamebot to prove symmetry
+    arena.addRobot(flame4,"flame_7",'7',/*row*/15,/*col*/1); 
+    RobotBase* flame5=create_robot_flame();
+    arena.addRobot(flame5,"flame_8",'8',/*row*/8,/*col*/16); 
+    RobotBase* flame6=create_robot_flame();
+    // A second flamebot to prove symmetry
+    arena.addRobot(flame6,"flame_9",'9',/*row*/5,/*col*/13); 
+    RobotBase* ratboy1=create_robot_rat();
+    arena.addRobot(ratboy1,"rat_1",'R',8,11);
+    arena.run(200);
+    return 0;
+
+}

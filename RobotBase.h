@@ -68,7 +68,6 @@ public:
     virtual void process_radar_results(const std::vector<RadarObj>& radar_results) = 0;
     virtual bool get_shot_location(int& shot_row, int& shot_col) = 0;
     virtual void get_move_direction(int &direction,int &distance) = 0;
-
     // Virtual destructor
     virtual ~RobotBase();
 };

@@ -3,7 +3,7 @@
 #include <iostream>
 #include <algorithm> // For std::find_if
 
-class Robot_Ratboy:public RobotBase{
+class Robot_Hammer:public RobotBase{
 private:
     bool m_moving_down=true;// Tracks vertical movement direction
     int to_shoot_row=-1;// Tracks the row of the next target to shoot
@@ -27,7 +27,7 @@ private:
     }
 }
 public:
-    Robot_Ratboy() : RobotBase(3, 4, railgun) {} // Initialize with 3 movement, 4 armor, railgun
+    Robot_Hammer() : RobotBase(2, 5, hammer) {} // Initialize with 3 movement, 4 armor, railgun
     // Radar location for scanning in one of the 8 directions
     virtual void get_radar_direction(int& radar_direction) override{
         int current_row, current_col;
@@ -86,4 +86,4 @@ void get_move_direction(int& move_direction,int& move_distance)override{
             move_direction=5;//Down
             move_distance=1;/*Take a single step down*/}}}};
 // Factory function to create Robot_Ratboy
-extern "C" RobotBase* create_robot_rat(){return new Robot_Ratboy();}
+extern "C" RobotBase* create_robot_rat(){return new Robot_Hammer();}
