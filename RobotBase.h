@@ -39,6 +39,9 @@ private:
     int m_location_col;
 
 public:
+    //ADDED FOR DEBUGGING
+    //virtual int get_times_stuck() const { return 0; }
+    //END FOR DEBUGGING
 
     int m_board_row_max;
     int m_board_col_max;

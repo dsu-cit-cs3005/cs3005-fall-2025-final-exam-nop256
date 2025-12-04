@@ -6,41 +6,71 @@
 #include <cmath>
 #include <random>
 #include <iomanip>
+#include <thread>
+#include <chrono>
+#include <fstream>
+
 
 extern const std::pair<int,int> directions[9];
 
 Arena::Arena(int rows,int cols):m_board(rows,cols){ m_board.seedDefaultFeatures();}
 Arena::~Arena(){ for(auto& re : m_robots) delete re.bot;}
 
-void Arena::addRobot(RobotBase* robot,const std::string& name,char glyph, int row,int col){
-    RobotEntry r{robot,name,glyph,row,col,true};
+namespace {
+    const char ID_POOL[] = {'!','@','#','$','%','^','&','*'};
+    int id_pool_index = 0;
+
+    char nextIdGlyph() {
+        char ch = ID_POOL[id_pool_index];
+        id_pool_index = (id_pool_index + 1) % (int)(sizeof(ID_POOL)/sizeof(ID_POOL[0]));
+        return ch;
+    }
+}
+
+void Arena::addRobot(RobotBase* robot,
+                     const std::string& name,
+                     char weaponGlyph,
+                     int row,
+                     int col) {
+    RobotEntry r;
+    r.bot         = robot;
+   r.name        = name;
+    r.weaponGlyph = weaponGlyph;
+    r.idGlyph     = nextIdGlyph();
+    r.r           = row;
+    r.c           = col;
+    r.alive       = true;
+
     r.bot->set_boundaries(m_board.rows(), m_board.cols());
-    r.bot->move_to(row,col);
-    r.bot->m_name = name;
-    r.bot->m_character = glyph;
-    m_robots.push_back(r);}
+    r.bot->move_to(row, col);
+    r.bot->m_name      = name;
+    r.bot->m_character = weaponGlyph;
+
+    m_robots.push_back(r);
+}
+
+
 int Arena::aliveCount()const{
     int n=0; for(auto& r: m_robots)if(r.alive && r.bot->get_health()>0) n++;
     return n;}
+
+
 bool Arena::occupied(int r,int c, int* idx_out) const{
     for(size_t i=0;i<m_robots.size();++i){
         const auto& e=m_robots[i];
         if(e.alive && e.r==r && e.c==c){ if(idx_out) *idx_out=(int)i; return true;}}return false;}
+
 char Arena::boardCharAt(int r, int c) const {
-    // If there is any robot here (dead or alive), draw the robot
     int idx = -1;
     if (occupiedAny(r, c, &idx) && idx >= 0) {
         const auto &e = m_robots[idx];
         if (e.alive && e.bot->get_health() > 0) {
-            // alive robot: show its glyph
             return e.bot->m_character;
         } else {
-            // dead robot acts like a corpse/obstacle
             return 'X';
         }
     }
 
-    // Otherwise draw terrain from the board
     Tile t = m_board.get(r, c);
     switch (t) {
         case Tile::Mound: return 'M';
@@ -51,11 +81,11 @@ char Arena::boardCharAt(int r, int c) const {
 }
 void Arena::printBoard(std::ostream& os) const {
     // header
-    os << "    "; // left margin before column numbers
+    os << "\n\n\n    "; // left margin before column numbers
     for (int c = 0; c < m_board.cols(); ++c) {
-        os << std::setw(2) << c << " ";  // width 2, right aligned
+        os << std::setw(3) << c << " ";  // width 2, right aligned
     }
-    os << '\n';
+    os << '\n' << ' ';
 
     for (int r = 0; r < m_board.rows(); ++r) {
         // row label
@@ -63,10 +93,9 @@ void Arena::printBoard(std::ostream& os) const {
 
         // cells
         for (int c = 0; c < m_board.cols(); ++c) {
-            char ch = boardCharAt(r, c); // however you currently get '.' or 'R' etc
-            os << ch << ' ' << ' ';             // extra space is purely visual
+            os << boardCellString(r,c) << ' ' << ' ';             
         }
-        os << '\n';
+        os << '\n' << '\n' << ' ';
     }
 }
 
@@ -84,81 +113,429 @@ bool Arena::occupiedAny(int r,int c,int* idx_out)const{
             if (idx_out) *idx_out=(int)i;
             return true;}}
     return false;}
-std::vector<RadarObj> Arena::scanDirection(const RobotEntry& re,int dir)const{
-    std::vector<RadarObj> out;
-    if(dir<1||dir>8)return out;
-    int dr=directions[dir].first,dc=directions[dir].second;
-    int r=re.r+dr, c=re.c+dc;
-    while(m_board.inBounds(r,c)){
-        // report terrain if present
-        Tile t = m_board.get(r,c);
-        if(t==Tile::Mound){out.emplace_back('M',r,c);break; }
-        if(t==Tile::Pit)  {out.emplace_back('P',r,c);/* pits don't block radar */ }
-        if(t==Tile::Flame){out.emplace_back('F',r,c);/* flames don't block radar */ }
 
-        int idx=-1;
-        if(occupiedAny(r,c,&idx)){ // bodies block vision
-            out.emplace_back('R',r,c);
-            break;}
-        r+=dr; c+=dc;}
-    return out;}
+std::vector<RadarObj> Arena::scanDirection(const RobotEntry& re,int dir) const {
+    std::vector<RadarObj> out;
+    if (dir < 1 || dir > 8) return out;
+
+    int dr = directions[dir].first;
+    int dc = directions[dir].second;
+    int r  = re.r + dr;
+    int c  = re.c + dc;
+
+    while (m_board.inBounds(r,c)) {
+        // First: check for robots in this cell
+        int idx = -1;
+        if (occupiedAny(r,c,&idx) && idx >= 0) {
+            const auto& e = m_robots[idx];
+
+            char type;
+            if (e.alive && e.bot->get_health() > 0) {
+                // Use weapon glyph so bots show up as 'R','F','H','G'
+                type = e.weaponGlyph;
+            } else {
+                type = 'X'; // dead body
+            }
+
+            out.emplace_back(type, r, c);
+            //break;  // robots block radar
+        }
+
+        // Otherwise: terrain
+        Tile t = m_board.get(r,c);
+        if (t == Tile::Mound) {
+            out.emplace_back('M', r, c);
+            //break;          // mound blocks radar
+        }
+        if (t == Tile::Pit) {
+            out.emplace_back('P', r, c);
+            // pit does NOT block radar
+        }
+        if (t == Tile::Flame) {
+            out.emplace_back('T', r, c);
+            // flame does NOT block radar
+        }
+
+        r += dr;
+        c += dc;
+    }
+    return out;
+}
+
+
 
 static constexpr bool SHOTS_BLOCKED_BY_BODIES=false;
 static constexpr bool SHOTS_BLOCKED_BY_MOUNDS=false;
 
+void Arena::resolveShot(const RobotEntry& shooterEntry, int shot_r, int shot_c) {
+    if (!m_board.inBounds(shooterEntry.r, shooterEntry.c)) return;
 
-void Arena::resolveShot(const RobotEntry& shooter,int shot_r,int shot_c){
-    int sr=shooter.r, sc=shooter.c;
-    int dr=(shot_r>sr)?1:(shot_r<sr ? -1:0);
-    int dc=(shot_c>sc)?1:(shot_c<sc ? -1:0);
-    // must be row/col/diagonal aligned
-    if(!((sr==shot_r)||(sc==shot_c)||(std::abs(shot_r-sr)==std::abs(shot_c-sc))))return;
-    int r=sr+dr, c=sc+dc;
-    while (m_board.inBounds(r,c)){
-        if(SHOTS_BLOCKED_BY_MOUNDS && m_board.get(r,c)==Tile::Mound)break;
-        int idx=-1;
-        if(occupiedAny(r,c,&idx)&&idx>=0){
-            auto& tgt=m_robots[idx];
-            if(tgt.alive){
-                int before = tgt.bot->get_health();
-                DM::applyArmorThenDegrade(*tgt.bot,DM::RailgunDamage);
-                int after = tgt.bot->get_health();
-                std::cout << "  " << shooter.name
-                          << " hits " << tgt.name
-                          << " at (" << r << "," << c << ")"
-                          << " for " << (before - after)
-                          << " damage (hp " << before << " -> " << after << ")\n";
-                 if (after == 0) {
-                    tgt.alive = false;
-                    std::cout << "  " << tgt.name
-                              << " is DESTROYED by " << shooter.name << "!\n";
-                }
-            }
-            if (SHOTS_BLOCKED_BY_BODIES) break;
-        }
-        r += dr; c += dc;
+    auto weapon = shooterEntry.bot->get_weapon();
+
+    switch (weapon) {
+        case railgun:
+            resolveRailgunShot(shooterEntry, shot_r, shot_c);
+            break;
+        case flamethrower:
+            resolveFlameShot(shooterEntry, shot_r, shot_c);
+            break;
+        case hammer:
+            resolveHammerAttack(shooterEntry, shot_r, shot_c);
+            break;
+        case grenade:
+            resolveGrenade(shooterEntry, shot_r, shot_c);
+            break;
+        default:
+            break;
     }
 }
 
-void Arena::applyMovement(RobotEntry& re,int dir,int dist){
-    if(dir<1||dir>8||dist<=0) return;
-    dist =std::min(dist,re.bot->get_move_speed());
-    int dr=directions[dir].first,dc=directions[dir].second;
-    for(int step=0;step<dist;++step){
-        int nr=re.r+dr,nc=re.c+dc;
-        if(!m_board.inBounds(nr,nc))break;
-        if(m_board.get(nr,nc)==Tile::Mound)break;
-        int idx=-1;
-        if(occupiedAny(nr,nc,&idx)){ // dead or alive: collision stop
+void Arena::resolveRailgunShot(const RobotEntry& shooterEntry, int shot_r, int shot_c){
+    int sr = shooterEntry.r, sc = shooterEntry.c;
+    int dr = (shot_r > sr) ? 1 : (shot_r < sr ? -1 : 0);
+    int dc = (shot_c > sc) ? 1 : (shot_c < sc ? -1 : 0);
+
+    if (!((sr == shot_r) || (sc == shot_c) ||
+          (std::abs(shot_r - sr) == std::abs(shot_c - sc)))) return;
+
+    int shooterIdx = -1;
+    for (int i = 0; i < (int)m_robots.size(); ++i) {
+        if (&m_robots[i] == &shooterEntry) {
+            shooterIdx = i;
+            break;
+        }
+    }
+
+    if (shooterIdx < 0) return;
+    auto& shooter = m_robots[shooterIdx];
+    shooter.shotsFired++;
+
+    int r = sr + dr, c = sc + dc;
+    while (m_board.inBounds(r,c)){
+        if (SHOTS_BLOCKED_BY_MOUNDS && m_board.get(r,c) == Tile::Mound) break;
+
+        int idx = -1;
+        if (occupiedAny(r,c,&idx) && idx >= 0) {
+            auto& tgt = m_robots[idx];
+
+            if (tgt.alive) {
+                int before = tgt.bot->get_health();
+                DM::applyArmorThenDegrade(*tgt.bot, DM::RailgunDamage);
+                int after = tgt.bot->get_health();
+                int dealt = before - after;
+
+                shooter.shotsHit++;
+                shooter.damageDealt += dealt;
+                tgt.damageTaken += dealt;
+
+                if (dealt > 0) {
+                    m_damage_or_death_this_round = true;
+                }
+
+                std::cout << "EVENT,SHOT,"
+                             << shooter.name << ","
+                             << tgt.name << ","
+                             << std::to_string(r) << ","
+                             << std::to_string(c) << ","
+                             << std::to_string(dealt);
+
+                if (after == 0) {
+                    tgt.alive = false;
+                    tgt.died = true;
+                    tgt.deathRow = tgt.r;
+                    tgt.deathCol = tgt.c;
+                    tgt.causeOfDeath =
+                        "railgun from " + shooter.name;
+                    shooter.kills++;
+                    m_damage_or_death_this_round = true;
+
+                    std::cout << "EVENT,KILL,"
+                                 << shooter.name << ","
+                                 << tgt.name + ",railgun";
+                }
+            }
+
+            if (SHOTS_BLOCKED_BY_BODIES) break;
+        }
+
+        r += dr;
+        c += dc;
+    }
+}
+
+void Arena::resolveFlameShot(const RobotEntry& shooterEntry,
+                             int shot_r, int shot_c) {
+    int sr = shooterEntry.r, sc = shooterEntry.c;
+    int dr = (shot_r > sr) ? 1 : (shot_r < sr ? -1 : 0);
+    int dc = (shot_c > sc) ? 1 : (shot_c < sc ? -1 : 0);
+
+    if (dr == 0 && dc == 0) return;
+
+    int shooterIdx = -1;
+    for (int i = 0; i < (int)m_robots.size(); ++i) {
+        if (&m_robots[i] == &shooterEntry) { shooterIdx = i; break; }
+    }
+    if (shooterIdx < 0) return;
+    auto& shooter = m_robots[shooterIdx];
+    shooter.shotsFired++;
+
+    const int MAX_RANGE = 4;
+    const int HALF_WIDTH = 1;
+    for (int step = 1; step <= MAX_RANGE; ++step) {
+        int center_r = sr + dr * step;
+        int center_c = sc + dc * step;
+        if (!m_board.inBounds(center_r, center_c)) break;
+
+        for (int off = -HALF_WIDTH; off <= HALF_WIDTH; ++off) {
+            int r = center_r;
+            int c = center_c;
+
+            if (dr == 0 && dc != 0) {
+                r = center_r + off;
+            } else if (dc == 0 && dr != 0) {
+                c = center_c + off;
+            } else {
+                r = center_r + off;
+                c = center_c + off;
+            }
+
+            if (!m_board.inBounds(r,c)) continue;
+
+            int idx = -1;
+            if (occupiedAny(r,c,&idx) && idx >= 0) {
+                auto& tgt = m_robots[idx];
+                if (!tgt.alive) continue;
+
+                int before = tgt.bot->get_health();
+                DM::applyArmorThenDegrade(*tgt.bot, DM::FlamethrowerDamage); 
+                int after = tgt.bot->get_health();
+                int dealt = before - after;
+
+                if (dealt > 0) {
+                    shooter.shotsHit++;
+                    shooter.damageDealt += dealt;
+                    tgt.damageTaken     += dealt;
+                    m_damage_or_death_this_round = true;
+                }
+
+                if (after == 0) {
+                    tgt.alive = false;
+                    tgt.died  = true;    
+                    tgt.deathRow = tgt.r;
+                    tgt.deathCol = tgt.c;
+                    tgt.causeOfDeath = "flamethrower from " + shooter.name;
+                    shooter.kills++;
+                    m_damage_or_death_this_round = true;
+                }
+            }
+
+        }
+    }
+}
+
+void Arena::resolveHammerAttack(const RobotEntry& shooterEntry,
+                                int /*shot_r*/, int /*shot_c*/) {
+    int sr = shooterEntry.r, sc = shooterEntry.c;
+
+    int shooterIdx = -1;
+    for (int i = 0; i < (int)m_robots.size(); ++i) {
+        if (&m_robots[i] == &shooterEntry) { shooterIdx = i; break; }
+    }
+    if (shooterIdx < 0) return;
+    auto& shooter = m_robots[shooterIdx];
+    shooter.shotsFired++;
+
+    for (int dr = -1; dr <= 1; ++dr) {
+        for (int dc = -1; dc <= 1; ++dc) {
+            if (dr == 0 && dc == 0) continue;
+            int r = sr + dr;
+            int c = sc + dc;
+            if (!m_board.inBounds(r,c)) continue;
+
+            int idx = -1;
+            if (!occupiedAny(r,c,&idx) || idx < 0) continue;
+            auto& tgt = m_robots[idx];
+            if (!tgt.alive) continue;
+
+            int before = tgt.bot->get_health();
+            DM::applyArmorThenDegrade(*tgt.bot, DM::HammerDamage); 
+            int after = tgt.bot->get_health();
+            int dealt = before - after;
+
+            if (dealt > 0) {
+                shooter.shotsHit++;
+                shooter.damageDealt += dealt;
+                tgt.damageTaken     += dealt;
+                m_damage_or_death_this_round = true;
+            }
+
+            if (after == 0) {
+                tgt.alive = false;
+                tgt.died  = true;
+                tgt.deathRow = tgt.r;
+                tgt.deathCol = tgt.c;
+                tgt.causeOfDeath = "hammer from " + shooter.name;
+                shooter.kills++;
+                m_damage_or_death_this_round = true;
+            }
+        }
+    }
+}
+
+void Arena::resolveGrenade(const RobotEntry& shooterEntry,
+                           int shot_r, int shot_c) {
+    int sr = shooterEntry.r, sc = shooterEntry.c;
+
+    int shooterIdx = -1;
+    for (int i = 0; i < (int)m_robots.size(); ++i) {
+        if (&m_robots[i] == &shooterEntry) { shooterIdx = i; break; }
+    }
+    if (shooterIdx < 0) return;
+    auto& shooter = m_robots[shooterIdx];
+
+    // limit range
+    const int MAX_RANGE = 6;
+    int manhattan = std::abs(shot_r - sr) + std::abs(shot_c - sc);
+    if (manhattan > MAX_RANGE) return;
+
+    shooter.shotsFired++;
+
+    const int BLAST_RADIUS = 1; 
+    for (int dr = -BLAST_RADIUS; dr <= BLAST_RADIUS; ++dr) {
+        for (int dc = -BLAST_RADIUS; dc <= BLAST_RADIUS; ++dc) {
+            int r = shot_r + dr;
+            int c = shot_c + dc;
+            if (!m_board.inBounds(r,c)) continue;
+
+            int idx = -1;
+            if (!occupiedAny(r,c,&idx) || idx < 0) continue;
+            auto& tgt = m_robots[idx];
+            if (!tgt.alive) continue;
+
+            int before = tgt.bot->get_health();
+            DM::applyArmorThenDegrade(*tgt.bot, DM::GrenadeDamage);
+            int after = tgt.bot->get_health();
+            int dealt = before - after;
+
+            if (dealt > 0) {
+                shooter.shotsHit++;
+                shooter.damageDealt += dealt;
+                tgt.damageTaken     += dealt;
+                m_damage_or_death_this_round = true;
+            }
+
+            if (after == 0) {
+                tgt.alive = false;
+                tgt.died  = true;
+                tgt.deathRow = tgt.r;
+                tgt.deathCol = tgt.c;
+                tgt.causeOfDeath = "grenade from " + shooter.name;
+                shooter.kills++;
+                m_damage_or_death_this_round = true;
+            }
+        }
+    }
+}
+
+
+void Arena::applyMovement(RobotEntry& re, int dir, int dist) {
+    if (dir < 1 || dir > 8 || dist <= 0) return;
+
+    dist = std::min(dist, re.bot->get_move_speed());
+    int dr = directions[dir].first;
+    int dc = directions[dir].second;
+
+    for (int step = 0; step < dist; ++step) {
+        int nr = re.r + dr;
+        int nc = re.c + dc;
+
+        if (!m_board.inBounds(nr, nc)) break;
+        if (m_board.get(nr, nc) == Tile::Mound) break;
+
+        int idx = -1;
+        if (occupiedAny(nr, nc, &idx)) {
             auto& other = m_robots[idx];
-            if(other.alive){ // damage only if the other is still alive
-                DM::applyArmorThenDegrade(*re.bot, DM::CollisionDamage);
+            if (other.alive) {
+                int beforeA = re.bot->get_health();
+                int beforeB = other.bot->get_health();
+
+                DM::applyArmorThenDegrade(*re.bot,   DM::CollisionDamage);
                 DM::applyArmorThenDegrade(*other.bot, DM::CollisionDamage);
-                if(re.bot->get_health()==0)re.alive=false;
-                if(other.bot->get_health()==0)other.alive=false;}break;}
-        re.r=nr; re.c=nc; re.bot->move_to(nr,nc);
-        if(m_board.get(nr,nc)==Tile::Pit){ re.bot->take_damage(9999); re.alive=false;break;}
-        if(m_board.get(nr,nc)==Tile::Flame){DM::applyArmorThenDegrade(*re.bot,8);if(re.bot->get_health()==0){re.alive=false;break;}}}}
+
+                int afterA = re.bot->get_health();
+                int afterB = other.bot->get_health();
+
+                int dealtA = beforeA - afterA;
+                int dealtB = beforeB - afterB;
+
+                re.damageTaken    += dealtB;
+                other.damageTaken += dealtA;
+
+                if (dealtA > 0 || dealtB > 0) {
+                    m_damage_or_death_this_round = true;
+                }
+                if (afterA == 0 && !re.died) {
+                    re.alive = false;
+                    re.died  = true;
+                    re.causeOfDeath = "collision with " + other.name;
+                    m_damage_or_death_this_round = true;
+                    re.deathRow = re.r;
+                    re.deathCol = re.c;
+                }
+                if (afterB == 0 && !other.died) {
+                    other.alive = false;
+                    other.died  = true;
+                    other.causeOfDeath = "collision with " + re.name;
+                    m_damage_or_death_this_round = true;
+                    other.deathRow = other.r;
+                    other.deathCol = other.c;
+                }
+            }
+            break;
+        }
+
+        re.r = nr;
+        re.c = nc;
+        re.bot->move_to(nr, nc);
+
+        if (m_board.get(nr, nc) == Tile::Pit) {
+            re.bot->take_damage(9999);
+            re.alive = false;
+            if (!re.died) {
+                re.died = true;
+                re.causeOfDeath = "pit";
+                re.deathRow = nr;
+                re.deathCol = nc;
+            }
+            m_damage_or_death_this_round = true;
+            break;
+        }
+
+        if (m_board.get(nr, nc) == Tile::Flame) {
+            int before = re.bot->get_health();
+            DM::applyArmorThenDegrade(*re.bot, 8);
+            int after = re.bot->get_health();
+            int dealt = before - after;
+            re.damageTaken += dealt;
+
+            if (dealt > 0) {
+                m_damage_or_death_this_round = true;
+            }
+
+            if (after == 0 && !re.died) {
+                re.alive = false;
+                re.died  = true;
+                re.causeOfDeath = "flame";
+                re.deathRow = nr;
+                re.deathCol = nc;
+                m_damage_or_death_this_round = true;
+            }
+
+            if (!re.alive) break;
+        }
+    }
+}
+
 
 bool Arena::doTurnAndReportAction(RobotEntry& re){
     if (!re.alive || re.bot->get_health() <= 0) {
@@ -168,26 +545,21 @@ bool Arena::doTurnAndReportAction(RobotEntry& re){
 
     bool acted = false;
 
-    // 1) Radar
     int radar_dir = 0;
     re.bot->get_radar_direction(radar_dir);
     auto hits = scanDirection(re, radar_dir);
 
-    // (we’ll add debug printing below)
     re.bot->process_radar_results(hits);
 
-    // 2) Shoot?
     int sr = 0, sc = 0;
     bool shot = re.bot->get_shot_location(sr, sc);
 
     if (shot) {
-        // robot chose to shoot – no movement this turn
         std::cout << "Robot " << re.name
                   << " shoots at (" << sr << "," << sc << ")\n";
         resolveShot(re, sr, sc);
         acted = true;
     } else {
-        // 3) No shot → ask for movement
         int md = 0, dist = 0;
         re.bot->get_move_direction(md, dist);
         if (md != 0 && dist > 0) {
@@ -200,37 +572,124 @@ bool Arena::doTurnAndReportAction(RobotEntry& re){
             std::cout << "Robot " << re.name << " does nothing.\n";
         }
     }
-
     return acted;
 }
 
-void Arena::run(int max_rounds){
-    std::cout<<"Starting Robot Warz on "<<m_board.rows()<<"x"<<m_board.cols()<<" board.\n";
-    int round=0;
+//RUN: GAME LOOP
+void Arena::run(int ms_delay_between_rounds){
+    std::cout << "Starting Robot Warz on "
+              << m_board.rows() << "x" << m_board.cols() << " board.\n";
+
+    int round = 0;
     rounds_since_action = 0;
-    while(round<max_rounds && aliveCount()>1){
+
+    auto now = std::time(nullptr);
+    long gameId = static_cast<long>(now);
+
+    while (aliveCount() > 1) {     
         ++round;
-        std::cout<<"\n=== Round "<<round<<" ===\n";
-        bool any_action=false;
-        for(auto& re : m_robots){
-            if(aliveCount()<=1) break;
-            any_action=doTurnAndReportAction(re)||any_action;}
+        std::cout << "\n\n";
+        std::cout << "\n=== Round " << round << " ===\n";
+
+        m_damage_or_death_this_round = false;
+
+        bool any_action = false;
+        for (auto& re : m_robots) {
+            if (aliveCount() <= 1) break;
+            any_action = doTurnAndReportAction(re) || any_action;
+        }
+
         printBoard(std::cout);
-        for(auto& re : m_robots)
-            std::cout<<re.bot->print_stats()<<(re.alive? "" : "  [DEAD]")<<"\n";
-        if(any_action) rounds_since_action = 0;
-        else           rounds_since_action++;
-        if(rounds_since_action >= STALEMATE_ROUNDS && aliveCount()>1){
-            std::cout <<"\n=== Stalemate Reached (" << STALEMATE_ROUNDS
-                      <<" rounds without actions). Co-winners: ===\n";
-            for (auto& re : m_robots)
-                if(re.alive && re.bot->get_health()>0)std::cout<<re.name<<"\n";
-            return;}}
+
+        for (auto& re : m_robots) {
+            std::cout << re.bot->print_stats()
+                      << (re.alive ? "" : "  [DEAD]") << "\n";
+        }
+
+        if (m_damage_or_death_this_round) {
+            rounds_since_action = 0;
+        } else {
+            ++rounds_since_action;
+        }
+
+        for (auto& re : m_robots) {
+            if (re.alive && re.bot->get_health() > 0) {
+                re.roundsAlive++;
+            }
+        }
+
+        // stalemate check
+        if (rounds_since_action >= STALEMATE_ROUNDS && aliveCount() > 1) {
+            std::cout << "\n=== Stalemate Reached ("
+                      << STALEMATE_ROUNDS
+                      << " rounds without damage or kills). Co-winners: ===\n";
+            for (auto& re : m_robots) {
+                if (re.alive && re.bot->get_health() > 0) {
+                    std::cout << re.name << "\n";
+                }
+            }
+            writeSweeperStats(gameId);
+            return;
+        }
+
+        if (ms_delay_between_rounds > 0) {
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(ms_delay_between_rounds)
+            );
+        }
+    }
+    writeSweeperStats(gameId);
+
     std::cout << "\n=== Game Over ===\n";
-    for (auto& re : m_robots)
-        if (re.alive && re.bot->get_health()>0) std::cout << "Winner: " << re.name << "\n";}
+    for (auto& re : m_robots) {
+        if (re.alive && re.bot->get_health() > 0) {
+            std::cout << "Winner: " << re.name << "\n";
+        }
+    }
+}
+
+void Arena::writeSweeperStats(long gameId) {
+    std::ofstream sweeperFile("sweeper_only_stats.csv", std::ios::app);
+    if (!sweeperFile) return;
+
+    if (sweeperFile.tellp() == 0) {
+        sweeperFile
+            << "gameId,name,weapon,won,"
+            << "shotsFired,shotsHit,kills,"
+            << "damageDealt,damageTaken,causeOfDeath,"
+            << "roundsSurvived,deathRow,deathCol,timesStuck\n";
+    }
+
+    for (auto& re : m_robots) {
+        bool isMySweeper =
+            (re.bot->get_weapon() == railgun) &&
+            (re.name.rfind("Sweeper_", 0) == 0); 
+
+        if (!isMySweeper) continue;
+
+        bool survived = (re.alive && re.bot->get_health() > 0);
+        std::string weapon(1, re.weaponGlyph);
+
+        sweeperFile
+            << gameId << ","
+            << re.name << ","
+            << weapon << ","
+            << (survived ? "1" : "0") << ","
+            << re.shotsFired << ","
+            << re.shotsHit << ","
+            << re.kills << ","
+            << re.damageDealt << ","
+            << re.damageTaken << ","
+            << (re.died ? re.causeOfDeath : "alive") << ","
+            << re.roundsAlive << ","
+            << re.deathRow << ","
+            << re.deathCol << ","
+            << "\n";
+    }
+}
+
+
 bool Arena::isObstacle(int row, int col) const {
-    // Treat any non-empty terrain as an obstacle for spawning
     Tile t = m_board.get(row, col);
     return (t == Tile::Mound ||
             t == Tile::Pit   ||
@@ -238,12 +697,10 @@ bool Arena::isObstacle(int row, int col) const {
 }
 
 bool Arena::hasRobot(int row, int col) const {
-    // Any robot (alive or dead) blocks this tile for spawning
     return occupiedAny(row, col, nullptr);
 }
 
 bool Arena::hasAdjacentRobot(int row, int col) const {
-    // True if any of the 8 neighbors contains a robot
     for (int dr = -1; dr <= 1; ++dr) {
         for (int dc = -1; dc <= 1; ++dc) {
             if (dr == 0 && dc == 0) continue;
@@ -260,7 +717,6 @@ bool Arena::isValidSpawn(int r, int c) const {
     if (isObstacle(r, c)) return false;
     if (hasRobot(r, c))   return false;
 
-    // enforce at least 1 tile away from other robots
     for (int dr = -1; dr <= 1; ++dr) {
         for (int dc = -1; dc <= 1; ++dc) {
             if (dr == 0 && dc == 0) continue;
@@ -294,11 +750,31 @@ void Arena::addRobotRandom(RobotBase* robot,
         }
     }
 
-    // If we get here, we failed to find a valid spawn. Later, might either:
-    // - throw, or
-    // - fall back to a relaxed rule (like ignore adjacency), or
-    // - just don't add the robot.
-    // For now:
     std::cerr << "Warning: could not place robot " << name
               << " after " << maxAttempts << " attempts.\n";
 }
+
+std::string Arena::boardCellString(int r, int c) const {
+    int idx = -1;
+    if (occupiedAny(r, c, &idx) && idx >= 0) {
+        const auto& e = m_robots[idx];
+
+        char base = (e.alive && e.bot->get_health() > 0)
+                    ? e.weaponGlyph    
+                    : 'X';             // dead
+
+        std::string s;
+        s += base;
+        s += e.idGlyph;                
+        return s;
+    }
+
+    Tile t = m_board.get(r, c);
+    switch (t) {
+        case Tile::Mound: return " M";
+        case Tile::Pit:   return " P";
+        case Tile::Flame: return " F";
+        default:          return " .";
+    }
+}
+
