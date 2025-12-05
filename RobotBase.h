@@ -40,7 +40,7 @@ private:
 
 public:
     //ADDED FOR DEBUGGING
-    //virtual int get_times_stuck() const { return 0; }
+    virtual int get_times_stuck() const { return 0; }
     //END FOR DEBUGGING
 
     int m_board_row_max;

@@ -57,7 +57,7 @@ private:
         for (int i = 0; i < WEIGHT_COUNT; ++i) {
             s_bestWeights[i] = s_weights[i];
         }
-        s_bestReward = -1e18;
+        s_bestReward = -1e18;//nogood run yet
     }
 
     static void loadWeightsFromFile() {
@@ -66,32 +66,43 @@ private:
             loadDefaultWeights();
             return;
         }
+
         std::vector<double> vals;
         double v;
         while (in >> v) {
             vals.push_back(v);
         }
-        if ((int)vals.size() != WEIGHT_COUNT) {
+
+        if ((int)vals.size() == WEIGHT_COUNT + 1) {
+            s_bestReward = vals[0];
+            for (int i = 0; i < WEIGHT_COUNT; ++i) {
+                s_bestWeights[i] = vals[i + 1];
+                s_weights[i]     = s_bestWeights[i];//need this to tsart from best
+            }
+        } else if ((int)vals.size() == WEIGHT_COUNT) {
+            for (int i = 0; i < WEIGHT_COUNT; ++i) {
+                s_bestWeights[i] = vals[i];
+                s_weights[i]     = vals[i];
+            }
+            s_bestReward = -1e18; 
+        } else {
+            //fvall back to defauls
             loadDefaultWeights();
-            return;
         }
-        for (int i = 0; i < WEIGHT_COUNT; ++i) {
-            s_weights[i] = vals[i];
-            s_bestWeights[i] = vals[i];
-        }
-        s_bestReward = -1e18;
     }
 
-    static void saveWeightsToFile() {
+    static void saveBestWeightsToFile() {
         std::ofstream out("reaper_weights.txt", std::ios::trunc);
         if (!out) return;
+
+        out << s_bestReward;
         for (int i = 0; i < WEIGHT_COUNT; ++i) {
             if (i) out << ' ';
-            //persist *current weights
-            out << s_weights[i];
+            out << ' ' << s_bestWeights[i];
         }
         out << "\n";
     }
+
 
     static void initWeightsIfNeeded() {
         if (!s_weightsInitialized) {
@@ -133,6 +144,7 @@ private:
         int  roundsSurvived = 0;
         int  timesStuck = 0;
         bool valid = false;
+        bool diedByRail = false;
     };
 
     static bool parseReaperRow(const std::string& line, ReaperStatsRow& row) {
@@ -252,8 +264,12 @@ private:
         int ts = std::max(st.timesStuck, internalTimesStuck);
         reward -= ts * 2.0;
 
-        if (deathBucket == 1) reward -= 300.0;
-        else if (deathBucket == 2) reward -= 200.0;
+        if (deathBucket == 1) reward -= 300.0;//pit
+        else if (deathBucket == 2) reward -= 500.0;
+
+        if (st.diedByRail) {
+            reward -= 900.0;
+            }
 
         return reward;
     }
@@ -305,8 +321,8 @@ private:
 
     bool isFlamerZone(int r, int c) const {
         if (!memoryInitialized) return false;
-        int radius = 3;
-        const int FLAME_TTL = 20; // tweak
+        int radius = 4;
+        const int FLAME_TTL = 9999999;
 
         for (int dr = -radius; dr <= radius; ++dr) {
             for (int dc = -radius; dc <= radius; ++dc) {
@@ -398,13 +414,13 @@ private:
             score += int(2000 * s_weights[W_UNKNOWN_TILE]);
         }
 
-        /*if (t == 'F') {
-            score += int(50'000 * s_weights[W_FLAME_TILE]);
+        if (t == 'F') {
+            score += int(100'000 * s_weights[W_FLAME_TILE]);
         }
 
         if (t == 'P') {
-            score += int(50'000 * s_weights[W_PIT_TILE]);
-        }*/
+            score += int(100'000 * s_weights[W_PIT_TILE]);
+        }
 
         if (isFlamerZone(r, c)) {
             score += int(25'000 * s_weights[W_FLAMER_ZONE]);
@@ -805,7 +821,8 @@ public:
     std::vector<std::pair<int,int>> recentPositions;
 
     int timesStuck = 0;
-    //int get_times_stuck() const override { return timesStuck; } //FOR DEBUGGING //OBSOLETE
+    int get_times_stuck() const override { return timesStuck; } //FOR DEBUGGING //OBSOLETE
+
 
     ~Robot_Reaper() override {
         logGameSummary();
@@ -814,25 +831,29 @@ public:
         if (loadLastReaperStatsForName(m_name, st) && st.valid) {
             DeathBucket b = classifyDeathBucket();
             int bucketInt = 3;
-            if (b == DB_PIT)   bucketInt = 1;
+            if (b == DB_PIT)      bucketInt = 1;
             else if (b == DB_FLAME) bucketInt = 2;
             else if (b == DB_ALIVE) bucketInt = 0;
 
             double reward = computeReward(st, bucketInt, timesStuck);
+
+            logLearningRow(m_name, st, reward);
 
             if (reward > s_bestReward) {
                 s_bestReward = reward;
                 for (int i = 0; i < WEIGHT_COUNT; ++i) {
                     s_bestWeights[i] = s_weights[i];
                 }
+                saveBestWeightsToFile();
+            } else {
+                for (int i = 0; i < WEIGHT_COUNT; ++i) {
+                    s_weights[i] = s_bestWeights[i];
+                }
             }
-
-            logLearningRow(m_name, st, reward);
-
             mutateWeights();
-            saveWeightsToFile();
         }
     }
+
 
 
     void get_radar_direction(int& radar_direction) override {
@@ -870,7 +891,7 @@ public:
         bool have_lock = false;
 
         auto isEnemyBot = [](char t) {
-            return (t == 'R' || t == 'F' || t == 'H' || t == 'G');
+            return (t == 'R' || /*t == 'F' ||*/ t == 'H' || t == 'G');
         };
         auto isRailgunBot = [](char t) {
             return (t == 'R');
@@ -886,7 +907,7 @@ public:
 
             if (ot == 'M' || ot == 'P' || ot == 'F' || ot == 'X') {
                 terrainMemory[rr][cc2] = ot;
-                if (ot == 'T') {
+                if (ot == 'F') {
                     flameLastSeenTurn[rr][cc2] = currentTurn;
                 }
             } else if (ot == '.') {
@@ -1181,7 +1202,7 @@ public:
             }
         }
 
-        const int REPOSITION_TURNS = 150;
+        const int REPOSITION_TURNS = 70;
         if (!escapeMode && turnsSinceLastSeen >= REPOSITION_TURNS) {
             int repRow = -1, repCol = -1;
             chooseRepositionCorner(cr, cc, repRow, repCol);

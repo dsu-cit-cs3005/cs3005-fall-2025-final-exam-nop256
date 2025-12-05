@@ -14,6 +14,13 @@ total_escape_causes = [0] * 4
 total_known = [0] * 3
 total_stuck = 0
 
+def find_value(parts, prefix):
+    """Find the token that starts with prefix and return the text after '='."""
+    for p in parts:
+        if p.startswith(prefix) and "=" in p:
+            return p.split("=", 1)[1]
+    return None
+
 with open("reaper_stats.csv") as f:
     for line in f:
         line = line.strip()
@@ -21,31 +28,20 @@ with open("reaper_stats.csv") as f:
             continue
 
         parts = line.split()
-        # Expected:
-        # 0: [SWEEPER-BRAIN-SUMMARY]
-        # 1: Sweeper_1
-        # 2: game=1
-        # 3: movesByMode(...)=a,b,c,d,e
-        # 4: staysByMode(...)=a,b,c,d,e
-        # 5: dirCounts(0..8)=...
-        # 6: escapeCauses(...)=w,x,y,z
-        # 7: knownBuckets(...)=l,m,h
-        # 8: timesStuck=N
-        # 9: | (maybe)
-        # 10+: GLOBAL_...
 
-        if len(parts) < 9:
-            continue  # malformed line, skip
+        # try to pull each field by its label instead of fixed index
+        moves_str = find_value(parts, "movesByMode(")
+        stays_str = find_value(parts, "staysByMode(")
+        dir_str   = find_value(parts, "dirCounts(")
+        esc_str   = find_value(parts, "escapeCauses(")
+        known_str = find_value(parts, "knownBuckets(")
+        stuck_str = find_value(parts, "timesStuck")
 
-        # per-game (you can ignore the actual "game=" value since it’s always 1 here)
+        # if any are missing, skip this line (old format or malformed)
+        if None in (moves_str, stays_str, dir_str, esc_str, known_str, stuck_str):
+            continue
+
         total_games += 1
-
-        moves_str  = parts[3].split("=", 1)[1]
-        stays_str  = parts[4].split("=", 1)[1]
-        dir_str    = parts[5].split("=", 1)[1]
-        esc_str    = parts[6].split("=", 1)[1]
-        known_str  = parts[7].split("=", 1)[1]
-        stuck_str  = parts[8].split("=", 1)[1]
 
         moves = list(map(int, moves_str.split(",")))
         stays = list(map(int, stays_str.split(",")))
@@ -99,4 +95,3 @@ for i, name in enumerate(KNOWN_BUCKET_NAMES):
     print(f"  {name:6s}: {total_known[i]}")
 
 print(f"\nTotal timesStuck across all games: {total_stuck}")
-
