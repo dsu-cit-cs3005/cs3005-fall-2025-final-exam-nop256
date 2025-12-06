@@ -41,6 +41,7 @@ public:
     void run(int ms_delay_between_rounds = 100);
 
 private:
+    void seedRandomTerrain();
     bool isObstacle(int row, int col) const;      
     bool hasRobot(int row, int col) const;        
     bool hasAdjacentRobot(int row, int col) const;
@@ -71,7 +72,7 @@ private:
 
 
     int rounds_since_action = 0;
-    static constexpr int STALEMATE_ROUNDS = 200;
+    static constexpr int STALEMATE_ROUNDS = 500;
     bool m_damage_or_death_this_round = false;
 
     std::string boardCellString(int r, int c) const;

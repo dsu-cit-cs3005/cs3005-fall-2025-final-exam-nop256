@@ -3,10 +3,12 @@
 #include <vector>
 #include <string>
 
-extern "C" RobotBase* create_robot();        // Reaper
-extern "C" RobotBase* create_robot_flame();  // Flamethrower bot
-extern "C" RobotBase* create_robot_rat();    // Ratboy bot
-extern "C" RobotBase* create_robot_hammer();    // Hammer bot
+extern "C" RobotBase* create_robot();           //reaper
+extern "C" RobotBase* create_robot_flame();     //flamethrower bot
+extern "C" RobotBase* create_robot_rat();       //ratboy bot
+extern "C" RobotBase* create_robot_hammer();    //hammer bot
+extern "C" RobotBase* create_robot_grenadier(); //grenadier bot
+extern "C" RobotBase* create_robot_sniper();    //sniper bot
 
 struct RobotSpec {
     RobotFactory factory;
@@ -27,10 +29,12 @@ int main(int argc, char** argv) {
         Arena arena(rows, cols);
 
         std::vector<RobotSpec> specs = {
-            { create_robot,       "Reaper",  'S', 1 },
-            { create_robot_flame, "Flame",    'R', 8 },
-            { create_robot_rat,   "Rat",      'R', 7 },
-            { create_robot_hammer,   "Hammer",   'R', 8 },
+            { create_robot,          "Reaper",   'S', 1  },
+            { create_robot_flame,    "Flame",    'R', 7 },
+            { create_robot_rat,      "Rat",      'R', 4 },
+            { create_robot_hammer,   "Hammer",   'R', 7 },
+            { create_robot_grenadier,"Grenadier",'R', 3 },
+            { create_robot_sniper,   "Sniper",   'R', 5 },
         };
 
         for (const auto& spec : specs) {

@@ -59,28 +59,28 @@ private:
     //static constexpr int SAVE_INTERVAL = 50;
 
     static void loadDefaultWeights() {
-        s_bestReward = 6341.8;
+        s_bestReward = -1e18;
 
         const double tuned[WEIGHT_COUNT] = {
-            0.498988,
-            0.989355,
-            1.15186,
-            0.292784,
-            0.606814,
-            1.35822,
-            0.534138,
-            0.797492,
-            0.995754,
-            0.405609,
-            2.21026,
-            2.09008,
-            0.350699,
-            1.285592,
-            0.254481,
-            0.354518,
-            4.54949,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
             0.0,
-            0.813103
+            1
         };
 
         for (int i = 0; i < WEIGHT_COUNT; ++i) {
@@ -921,7 +921,8 @@ public:
         bool have_lock = false;
 
         auto isEnemyBot = [](char t) {
-            return (t == 'R' || /*t == 'F' ||*/ t == 'H' || t == 'G');
+            return !(t == '.' || t == 'M' || t == 'P' || t == 'F' || t == 'X');
+            //return (t == 'R' || /*t == 'F' ||*/ t == 'H' || t == 'G');
         };
         auto isRailgunBot = [](char t) {
             return (t == 'R');
@@ -1112,7 +1113,7 @@ public:
         bool closeThreat = false;
         if (enemyThreatMemory > 0) {
             for (auto [r, c] : last_seen_this_turn) {
-                if (std::abs(r - cr) <= 6 && std::abs(c - cc) <= 6) {
+                if (std::abs(r - cr) <= 4 && std::abs(c - cc) <= 4) {
                     closeThreat = true;
                     break;
                 }
@@ -1331,7 +1332,7 @@ public:
 
 double Robot_Reaper::s_weights[Robot_Reaper::WEIGHT_COUNT];
 double Robot_Reaper::s_bestWeights[Robot_Reaper::WEIGHT_COUNT];
-double Robot_Reaper::s_bestReward = 6341.8;
+double Robot_Reaper::s_bestReward = -1e18;
 bool   Robot_Reaper::s_weightsInitialized = false;
 
 int Robot_Reaper::s_totalGames       = 0;

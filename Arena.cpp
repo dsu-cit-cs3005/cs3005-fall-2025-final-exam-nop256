@@ -13,7 +13,12 @@
 
 extern const std::pair<int,int> directions[9];
 
-Arena::Arena(int rows,int cols):m_board(rows,cols){ m_board.seedDefaultFeatures();}
+Arena::Arena(int rows,int cols)
+    :m_board(rows,cols)
+{
+    //m_board.seedDefaultFeatures();
+    seedRandomTerrain();
+}
 Arena::~Arena(){ for(auto& re : m_robots) delete re.bot;}
 
 namespace {
@@ -489,16 +494,18 @@ void Arena::applyMovement(RobotEntry& re, int dir, int dist) {
 
         Tile t = m_board.get(nr, nc);
         if (t == Tile::Pit) {
-            // falls into pit and becomes permanently stuck
             re.trappedInPit = true;
 
-            // NOTE: no damage, no death – they just can't move any more.
             break;
         }
 
         if (m_board.get(nr, nc) == Tile::Flame) {
+            static std::mt19937 rng(std::random_device{}());
+            std::uniform_int_distribution<int> flameDmgDist(30, 50); //30 to 50 damage per spec
+            int dmg = flameDmgDist(rng);
+
             int before = re.bot->get_health();
-            DM::applyArmorThenDegrade(*re.bot, 8);
+            DM::applyArmorThenDegrade(*re.bot, dmg);  //now uses armor ANDdegrades it
             int after = re.bot->get_health();
             int dealt = before - after;
             re.damageTaken += dealt;
@@ -540,7 +547,7 @@ bool Arena::doTurnAndReportAction(RobotEntry& re){
     bool shot = re.bot->get_shot_location(sr, sc);
 
     if (shot) {
-        std::cout << "Robot " << re.name
+        std::cout << "Robot " << re.name << re.weaponGlyph << re.idGlyph
                   << " shoots at (" << sr << "," << sc << ")\n";
         resolveShot(re, sr, sc);
         acted = true;
@@ -548,13 +555,13 @@ bool Arena::doTurnAndReportAction(RobotEntry& re){
         int md = 0, dist = 0;
         re.bot->get_move_direction(md, dist);
         if (md != 0 && dist > 0) {
-            std::cout << "Robot " << re.name
+            std::cout << "Robot " << re.name << re.weaponGlyph << re.idGlyph
                       << " moves: dir=" << md
                       << " dist=" << dist << "\n";
             applyMovement(re, md, dist);
             acted = true;
         } else {
-            std::cout << "Robot " << re.name << " does nothing.\n";
+            std::cout << "Robot " << re.name << re.weaponGlyph << re.idGlyph << " does nothing.\n";
         }
     }
     return acted;
@@ -587,7 +594,8 @@ void Arena::run(int ms_delay_between_rounds){
         printBoard(std::cout);
 
         for (auto& re : m_robots) {
-            std::cout << re.bot->print_stats()
+            std::cout << "[" << re.weaponGlyph << re.idGlyph << "] "
+                      << re.bot->print_stats()
                       << (re.alive ? "" : "  [DEAD]") << "\n";
         }
 
@@ -764,3 +772,47 @@ std::string Arena::boardCellString(int r, int c) const {
     }
 }
 
+void Arena::seedRandomTerrain()
+{
+    static std::mt19937 rng(std::random_device{}());
+
+    std::uniform_int_distribution<int> rowDist(0, m_board.rows() - 1);
+    std::uniform_int_distribution<int> colDist(0, m_board.cols() - 1);
+
+    auto isEmpty = [&](int r, int c) {
+        // Replace Tile::Empty with whatever your “open” tile is
+        Tile t = m_board.get(r, c);
+        return (t != Tile::Mound &&
+                t != Tile::Pit   &&
+                t != Tile::Flame);
+    };
+
+    auto placeMany = [&](Tile tileType, int count) {
+        int placed   = 0;
+        int attempts = 0;
+        const int MAX_ATTEMPTS = 10'000;
+
+        while (placed < count && attempts < MAX_ATTEMPTS) {
+            ++attempts;
+            int r = rowDist(rng);
+            int c = colDist(rng);
+
+            if (!isEmpty(r, c)) continue;
+
+            m_board.set(r, c, tileType);
+            ++placed;
+        }
+    };
+
+    std::uniform_int_distribution<int> pitCountDist(1, 3);
+    std::uniform_int_distribution<int> flameCountDist(2, 5);
+    std::uniform_int_distribution<int> moundCountDist(3, 5);
+
+    int numPits   = pitCountDist(rng);
+    int numFlames = flameCountDist(rng);
+    int numMounds = moundCountDist(rng);
+
+    placeMany(Tile::Pit,   numPits);
+    placeMany(Tile::Flame, numFlames);
+    placeMany(Tile::Mound, numMounds);
+}
