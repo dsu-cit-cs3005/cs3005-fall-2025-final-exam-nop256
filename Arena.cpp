@@ -34,7 +34,7 @@ void Arena::addRobot(RobotBase* robot,
                      int col) {
     RobotEntry r;
     r.bot         = robot;
-   r.name        = name;
+    r.name        = name;
     r.weaponGlyph = weaponGlyph;
     r.idGlyph     = nextIdGlyph();
     r.r           = row;
@@ -80,18 +80,14 @@ char Arena::boardCharAt(int r, int c) const {
     }
 }
 void Arena::printBoard(std::ostream& os) const {
-    // header
-    os << "\n\n\n    "; // left margin before column numbers
+    os << "\n\n\n    ";
     for (int c = 0; c < m_board.cols(); ++c) {
-        os << std::setw(3) << c << " ";  // width 2, right aligned
+        os << std::setw(3) << c << " "; 
     }
     os << '\n' << ' ';
 
     for (int r = 0; r < m_board.rows(); ++r) {
-        // row label
         os << std::setw(2) << r << "  ";
-
-        // cells
         for (int c = 0; c < m_board.cols(); ++c) {
             os << boardCellString(r,c) << ' ' << ' ';             
         }
@@ -109,7 +105,7 @@ bool Arena::occupiedAlive(int r,int c, int* idx_out) const {
 bool Arena::occupiedAny(int r,int c,int* idx_out)const{
     for (size_t i=0;i<m_robots.size();++i){
         const auto& e=m_robots[i];
-        if (e.r==r && e.c==c){ // NOTE: dead OR alive
+        if (e.r==r && e.c==c){
             if (idx_out) *idx_out=(int)i;
             return true;}}
     return false;}
@@ -124,36 +120,28 @@ std::vector<RadarObj> Arena::scanDirection(const RobotEntry& re,int dir) const {
     int c  = re.c + dc;
 
     while (m_board.inBounds(r,c)) {
-        // First: check for robots in this cell
         int idx = -1;
         if (occupiedAny(r,c,&idx) && idx >= 0) {
             const auto& e = m_robots[idx];
 
             char type;
             if (e.alive && e.bot->get_health() > 0) {
-                // Use weapon glyph so bots show up as 'R','F','H','G'
                 type = e.weaponGlyph;
             } else {
-                type = 'X'; // dead body
+                type = 'X';
             }
 
             out.emplace_back(type, r, c);
-            //break;  // robots block radar
         }
-
-        // Otherwise: terrain
         Tile t = m_board.get(r,c);
         if (t == Tile::Mound) {
             out.emplace_back('M', r, c);
-            //break;          // mound blocks radar
         }
         if (t == Tile::Pit) {
             out.emplace_back('P', r, c);
-            // pit does NOT block radar
         }
         if (t == Tile::Flame) {
-            out.emplace_back('T', r, c);
-            // flame does NOT block radar
+            out.emplace_back('F', r, c);
         }
 
         r += dr;
@@ -439,6 +427,7 @@ void Arena::resolveGrenade(const RobotEntry& shooterEntry,
 
 
 void Arena::applyMovement(RobotEntry& re, int dir, int dist) {
+    if (!re.alive || re.trappedInPit) return;
     if (dir < 1 || dir > 8 || dist <= 0) return;
 
     dist = std::min(dist, re.bot->get_move_speed());
@@ -498,16 +487,12 @@ void Arena::applyMovement(RobotEntry& re, int dir, int dist) {
         re.c = nc;
         re.bot->move_to(nr, nc);
 
-        if (m_board.get(nr, nc) == Tile::Pit) {
-            re.bot->take_damage(9999);
-            re.alive = false;
-            if (!re.died) {
-                re.died = true;
-                re.causeOfDeath = "pit";
-                re.deathRow = nr;
-                re.deathCol = nc;
-            }
-            m_damage_or_death_this_round = true;
+        Tile t = m_board.get(nr, nc);
+        if (t == Tile::Pit) {
+            // falls into pit and becomes permanently stuck
+            re.trappedInPit = true;
+
+            // NOTE: no damage, no death – they just can't move any more.
             break;
         }
 
@@ -628,7 +613,7 @@ void Arena::run(int ms_delay_between_rounds){
                     std::cout << re.name << "\n";
                 }
             }
-            writeSweeperStats(gameId);
+            writeReaperStats(gameId);
             return;
         }
 
@@ -638,7 +623,7 @@ void Arena::run(int ms_delay_between_rounds){
             );
         }
     }
-    writeSweeperStats(gameId);
+    writeReaperStats(gameId);
 
     std::cout << "\n=== Game Over ===\n";
     for (auto& re : m_robots) {
@@ -648,12 +633,12 @@ void Arena::run(int ms_delay_between_rounds){
     }
 }
 
-void Arena::writeSweeperStats(long gameId) {
-    std::ofstream sweeperFile("sweeper_only_stats.csv", std::ios::app);
-    if (!sweeperFile) return;
+void Arena::writeReaperStats(long gameId) {
+    std::ofstream reaperFile("reaper_only_stats.csv", std::ios::app);
+    if (!reaperFile) return;
 
-    if (sweeperFile.tellp() == 0) {
-        sweeperFile
+    if (reaperFile.tellp() == 0) {
+        reaperFile
             << "gameId,name,weapon,won,"
             << "shotsFired,shotsHit,kills,"
             << "damageDealt,damageTaken,causeOfDeath,"
@@ -661,16 +646,16 @@ void Arena::writeSweeperStats(long gameId) {
     }
 
     for (auto& re : m_robots) {
-        bool isMySweeper =
+        bool isMyReaper =
             (re.bot->get_weapon() == railgun) &&
-            (re.name.rfind("Sweeper_", 0) == 0); 
+            (re.name.rfind("Reaper_", 0) == 0); 
 
-        if (!isMySweeper) continue;
+        if (!isMyReaper) continue;
 
         bool survived = (re.alive && re.bot->get_health() > 0);
         std::string weapon(1, re.weaponGlyph);
 
-        sweeperFile
+        reaperFile
             << gameId << ","
             << re.name << ","
             << weapon << ","
@@ -684,6 +669,7 @@ void Arena::writeSweeperStats(long gameId) {
             << re.roundsAlive << ","
             << re.deathRow << ","
             << re.deathCol << ","
+            << 0
             << "\n";
     }
 }

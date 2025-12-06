@@ -14,8 +14,6 @@ struct RobotEntry {
     char idGlyph{'?'};      // special identifier !@#$%^&*
     int r{0}, c{0};
     bool alive{true};
-
-     // Stats for analysis
     int shotsFired{0};
     int shotsHit{0};
     int kills{0};
@@ -24,9 +22,7 @@ struct RobotEntry {
     int roundsAlive = 0;
     int deathRow    = -1;
     int deathCol    = -1;
-    int timesStuck  = 0; 
-
-    
+    int timesStuck  = 0;     
     bool died{false};
     std::string causeOfDeath;
 };
@@ -36,20 +32,11 @@ class Arena {
 public:
     Arena(int rows=20,int cols=20);
     ~Arena();
-
-    /*void addRobot(RobotBase* robot, const std::string& name, char glyph, int row, int col);
-    void addRobotRandom(RobotBase* robot,
-                        const std::string& name,
-                        char symbol);
-
-    void run(int max_rounds=500);*/
-
     void addRobot(RobotBase* robot, const std::string& name, char weaponGlyph, int row, int col);
     void addRobotRandom(RobotBase* robot,
                         const std::string& name,
                         char weaponGlyph);
 
-    //milliseconds delay between rounds (0=no delay)
     void run(int ms_delay_between_rounds = 100);
 
 private:
@@ -88,8 +75,5 @@ private:
 
     std::string boardCellString(int r, int c) const;
 
-    void writeSweeperStats(long gameId);
-
-    
-
+    void writeReaperStats(long gameId);
 };

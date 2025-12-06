@@ -6,7 +6,7 @@
 class Logger {
 public:
     static std::ofstream& get() {
-        static std::ofstream out("sweeper_stats.csv",
+        static std::ofstream out("reaper_stats.csv",
                                  std::ios::out | std::ios::app);
         return out;
     }
