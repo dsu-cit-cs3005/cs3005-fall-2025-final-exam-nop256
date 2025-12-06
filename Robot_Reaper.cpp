@@ -59,15 +59,34 @@ private:
     //static constexpr int SAVE_INTERVAL = 50;
 
     static void loadDefaultWeights() {
-        for (int i = 0; i < WEIGHT_COUNT; ++i) {
-            s_weights[i] = 1.0;
-        }
-        s_weights[W_EDGE_HUNT_BIAS] = 0.0;
+        s_bestReward = 6341.8;
+
+        const double tuned[WEIGHT_COUNT] = {
+            0.498988,
+            0.989355,
+            1.15186,
+            0.292784,
+            0.606814,
+            1.35822,
+            0.534138,
+            0.797492,
+            0.995754,
+            0.405609,
+            2.21026,
+            2.09008,
+            0.350699,
+            1.285592,
+            0.254481,
+            0.354518,
+            4.54949,
+            0.0,
+            0.813103
+        };
 
         for (int i = 0; i < WEIGHT_COUNT; ++i) {
-            s_bestWeights[i] = s_weights[i];
+            s_weights[i]     = tuned[i];
+            s_bestWeights[i] = tuned[i];
         }
-        s_bestReward = -1e18;//nogood run yet
     }
 
     static void loadWeightsFromFile() {
@@ -1312,7 +1331,7 @@ public:
 
 double Robot_Reaper::s_weights[Robot_Reaper::WEIGHT_COUNT];
 double Robot_Reaper::s_bestWeights[Robot_Reaper::WEIGHT_COUNT];
-double Robot_Reaper::s_bestReward = -1e18;
+double Robot_Reaper::s_bestReward = 6341.8;
 bool   Robot_Reaper::s_weightsInitialized = false;
 
 int Robot_Reaper::s_totalGames       = 0;
