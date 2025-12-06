@@ -9,7 +9,17 @@
 #include <string>
 #include <iostream>
 #include <cstdlib>
-#include "Logger.h"
+//#include "Logger.h"
+
+//LOCAL logger JUST for Reaper
+namespace {
+    std::ofstream& reaper_log() {
+        static std::ofstream out("reaper_stats.csv",
+                                 std::ios::out | std::ios::app);
+        return out;
+    }
+}
+
 
 class Robot_Reaper : public RobotBase {
 
@@ -761,7 +771,7 @@ private:
                                         case DB_ALIVE: ++s_totalAliveEnd;    break;
                                     }
 
-                                    Logger::get()
+                                    reaper_log()
                                     << "[SWEEPER-BRAIN-SUMMARY] " << m_name
                                     << " game=" << s_totalGames
                                     << " movesByMode(ESC,EXP,HUNT,REPOS,DRIFT)="
