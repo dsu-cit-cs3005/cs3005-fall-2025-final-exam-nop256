@@ -76,7 +76,7 @@ private:
 
     // stalemate tracking
     int rounds_since_action = 0;
-    static constexpr int STALEMATE_ROUNDS = 1000;
+    static constexpr int STALEMATE_ROUNDS = 200;
     bool m_damage_or_death_this_round = false;
 
     std::string boardCellString(int r, int c) const;

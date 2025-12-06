@@ -1081,10 +1081,10 @@ public:
             }
         }
 
-        bool hereIsFlamerZone = isFlamerZone(cr, cc);
+        //bool hereIsFlamerZone = isFlamerZone(cr, cc);
         bool currentRailThreat = (locked_dir != 0 && liveThreatDir[locked_dir] > 0);
+        bool escapeMode = (closeThreat || currentRailThreat || damageThreat);
 
-        bool escapeMode = (closeThreat || hereIsFlamerZone || currentRailThreat || damageThreat);
 
         static const std::pair<int,int> dirs[9] = {
             {0,0},{-1,0},{-1,1},{0,1},{1,1},{1,0},{1,-1},{0,-1},{-1,-1}
@@ -1121,6 +1121,41 @@ public:
 
                     int extra = 0;
 
+                    if (!last_seen_this_turn.empty()) {
+                        int bestLiveDistNow = 1000;
+                        int bestLiveDistNew = 1000;
+                        bool hasAlignedNow  = false;
+                        bool hasAlignedNew  = false;
+
+                        for (auto [er, ec] : last_seen_this_turn) {
+                            int drNow = er - cr;
+                            int dcNow = ec - cc;
+                            int drNew = er - fr;
+                            int dcNew = ec - fc;
+                            int chebNow = std::max(std::abs(drNow), std::abs(dcNow));
+                            int chebNew = std::max(std::abs(drNew), std::abs(dcNew));
+
+                            bool alignedNow = (drNow == 0) || (dcNow == 0) || (std::abs(drNow) == std::abs(dcNow));
+                            bool alignedNew = (drNew == 0) || (dcNew == 0) || (std::abs(drNew) == std::abs(dcNew));
+
+                            if (chebNow < bestLiveDistNow) bestLiveDistNow = chebNow;
+                            if (chebNew < bestLiveDistNew) bestLiveDistNew = chebNew;
+
+                            hasAlignedNow = hasAlignedNow || alignedNow;
+                            hasAlignedNew = hasAlignedNew || alignedNew;
+                        }
+
+                        //further from enemy bias
+                        if (bestLiveDistNew > bestLiveDistNow) {
+                            extra -= 500 * (bestLiveDistNew - bestLiveDistNow);
+                        }
+
+                        //expensive to break LOS
+                        if (hasAlignedNow && !hasAlignedNew) {
+                            extra += 4000;
+                        }
+                    }
+
                     if (last_move_dir != 0 && d != 0) {
                         int opposite = (last_move_dir + 4 - 1) % 8 + 1;
                         if (d == opposite) {
@@ -1155,7 +1190,7 @@ public:
             ++s_knownBucketCount[kb];
 
             if (closeThreat)      { ++escapeCauseCloseThreat; ++s_escapeCauseCloseThreat; }
-            if (hereIsFlamerZone) { ++escapeCauseFlamer;      ++s_escapeCauseFlamer;      }
+            //if (hereIsFlamerZone) { ++escapeCauseFlamer;      ++s_escapeCauseFlamer;      }
             if (currentRailThreat){ ++escapeCauseRail;        ++s_escapeCauseRail;        }
             if (damageThreat)     { ++escapeCauseDamage;      ++s_escapeCauseDamage;      }
 
