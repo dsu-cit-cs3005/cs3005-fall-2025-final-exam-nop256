@@ -24,6 +24,7 @@ struct RobotEntry {
     int deathCol    = -1;
     int timesStuck  = 0;     
     bool died{false};
+    bool trappedInPit = false;
     std::string causeOfDeath;
 };
 
