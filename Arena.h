@@ -11,7 +11,7 @@ struct RobotEntry {
     RobotBase* bot{};
     std::string name;
     char weaponGlyph{'R'};  // 'R','F','H','G', etc
-    char idGlyph{'?'};      // special identifier like !@#$%^&*
+    char idGlyph{'?'};      // special identifier !@#$%^&*
     int r{0}, c{0};
     bool alive{true};
     int shotsFired{0};
@@ -22,12 +22,9 @@ struct RobotEntry {
     int roundsAlive = 0;
     int deathRow    = -1;
     int deathCol    = -1;
-    int timesStuck  = 0; 
-
+    int timesStuck  = 0;     
     bool died{false};
-    std::string causeOfDeath; 
-
-    bool trappedInPit = false;
+    std::string causeOfDeath;
 };
 
 
@@ -51,7 +48,6 @@ private:
     Board m_board;
     std::vector<RobotEntry> m_robots;
 
-    // core steps
     void doTurn(RobotEntry& re);
     std::vector<RadarObj> scanDirection(const RobotEntry& re, int dir) const;
     void applyMovement(RobotEntry& re, int dir, int dist);
@@ -62,7 +58,6 @@ private:
     void resolveHammerAttack(const RobotEntry& shooterEntry,int shot_r, int shot_c);
     void resolveGrenade(const RobotEntry& shooterEntry,int shot_r, int shot_c);
 
-    // helpers
     bool occupied(int r,int c, int* idx_out=nullptr) const;
     int aliveCount() const;
     char boardCharAt(int r, int c) const; 
@@ -74,7 +69,6 @@ private:
     bool doTurnAndReportAction(RobotEntry& re);
 
 
-    // stalemate tracking
     int rounds_since_action = 0;
     static constexpr int STALEMATE_ROUNDS = 200;
     bool m_damage_or_death_this_round = false;
