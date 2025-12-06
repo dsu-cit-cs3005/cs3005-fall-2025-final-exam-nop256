@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
                 arena.addRobotRandom(bot, name, spec.symbol);
             }
         }
-            arena.run(300);
+            arena.run(0);
         }
     return 0;
 }

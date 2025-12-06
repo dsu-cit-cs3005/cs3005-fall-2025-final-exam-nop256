@@ -286,6 +286,7 @@ private:
     int lastHealth = -1;
     int damagePanicTurns = 0;
     int currentTurn = 0;
+    int enemyThreatMemory = 0;
     std::vector<std::vector<int>> flameLastSeenTurn;
 
     bool memoryInitialized = false;
@@ -696,7 +697,7 @@ private:
 
                                             for (const auto& p : recentPositions) {
                                                 if (p.first == fr && p.second == fc) {
-                                                    total += int(40'000 * s_weights[W_RECENT_POS_PENALTY]);
+                                                    total += int(80'000 * s_weights[W_RECENT_POS_PENALTY]);
                                                     break;
                                                 }
                                             }
@@ -821,7 +822,7 @@ public:
     std::vector<std::pair<int,int>> recentPositions;
 
     int timesStuck = 0;
-    int get_times_stuck() const override { return timesStuck; } //FOR DEBUGGING //OBSOLETE
+    //int get_times_stuck() const override { return timesStuck; } //FOR DEBUGGING //OBSOLETE
 
 
     ~Robot_Reaper() override {
@@ -1064,7 +1065,7 @@ public:
         bool damageThreat = (damagePanicTurns > 0);
 
         recentPositions.push_back({cr, cc});
-        if (recentPositions.size() > 7) {
+        if (recentPositions.size() > 10) {
             recentPositions.erase(recentPositions.begin());
         }
 
@@ -1073,11 +1074,19 @@ public:
             ++timesStuck;
         }
 
+        if (!last_seen_this_turn.empty()) {
+            enemyThreatMemory = 3; //3turn memory
+        } else if (enemyThreatMemory > 0) {
+            --enemyThreatMemory;
+        }
+
         bool closeThreat = false;
-        for (auto [r, c] : last_seen_this_turn) {
-            if (std::abs(r - cr) <= 4 && std::abs(c - cc) <= 4) {
-                closeThreat = true;
-                break;
+        if (enemyThreatMemory > 0) {
+            for (auto [r, c] : last_seen_this_turn) {
+                if (std::abs(r - cr) <= 6 && std::abs(c - cc) <= 6) {
+                    closeThreat = true;
+                    break;
+                }
             }
         }
 

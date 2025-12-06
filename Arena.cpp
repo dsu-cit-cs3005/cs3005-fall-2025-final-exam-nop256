@@ -669,7 +669,7 @@ void Arena::writeReaperStats(long gameId) {
             << re.roundsAlive << ","
             << re.deathRow << ","
             << re.deathCol << ","
-            << re.bot->get_times_stuck()
+            << 0
             << "\n";
     }
 }
