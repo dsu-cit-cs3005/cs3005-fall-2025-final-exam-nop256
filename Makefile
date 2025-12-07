@@ -1,6 +1,6 @@
 CXX=g++
 CXXFLAGS=-std=c++20 -Wall -Wextra -O2
-SRC=Board.cpp Arena.cpp main.cpp Robot_Reaper.cpp Robot_Flame_e_o.cpp Robot_Ratboy.cpp RobotBase.cpp Robot_Hammer.cpp Robot_Sniper.cpp Robot_Grenadier.cpp Robot_Cornersniper.cpp
+SRC=Board.cpp Arena.cpp main.cpp Robot_Reaper.cpp Robot_Flame_e_o.cpp Robot_Ratboy.cpp RobotBase.cpp Robot_Hammer.cpp Robot_Sniper.cpp Robot_Grenadier.cpp Robot_Cornersniper.cpp Robot_tune.cpp Robot_Bob.cpp
 HDR=Board.h Arena.h Tile.h DamageModel.h RobotBase.h RadarObj.h
 RobotWarz: $(SRC) $(HDR);$(CXX) $(CXXFLAGS) -o $@ $(SRC)
 all: test_robot
@@ -8,5 +8,7 @@ RobotBase.o: RobotBase.cpp RobotBase.h
 	$(CXX) $(CXXFLAGS) -c RobotBase.cpp
 test_robot: test_robot.cpp RobotBase.o
 	$(CXX) $(CXXFLAGS) test_robot.cpp RobotBase.o -ldl -o test_robot
+test_arena: test_arena.cpp RobotBase.o RadarObj.h RobotBase.h
+	$(CXX) $(CXXFLAGS) test_arena.cpp
 clean:;rm -f RobotWarz *.o test_robot *.so
 .PHONY:clean

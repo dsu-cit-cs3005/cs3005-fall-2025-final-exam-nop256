@@ -11,7 +11,6 @@
 #include <cstdlib>
 //#include "Logger.h"
 
-//LOCAL logger JUST for Reaper
 namespace {
     std::ofstream& reaper_log() {
         static std::ofstream out("reaper_stats.csv",
@@ -106,7 +105,7 @@ private:
             s_bestReward = vals[0];
             for (int i = 0; i < WEIGHT_COUNT; ++i) {
                 s_bestWeights[i] = vals[i + 1];
-                s_weights[i]     = s_bestWeights[i];//need this to tsart from best
+                s_weights[i]     = s_bestWeights[i];
             }
         } else if ((int)vals.size() == WEIGHT_COUNT) {
             for (int i = 0; i < WEIGHT_COUNT; ++i) {
@@ -115,7 +114,6 @@ private:
             }
             s_bestReward = 3120.8; 
         } else {
-            //fvall back to defauls
             loadDefaultWeights();
         }
     }
@@ -147,12 +145,11 @@ private:
         for (int i = 0; i < WEIGHT_COUNT; ++i) {
             double base = s_weights[i];
             if (i == W_EDGE_HUNT_BIAS && base <= 0.0) {
-                base = 0.2; //non-zero seed
+                base = 0.2;
             }
             double factor = 1.0 + noise(rng);
             double mutated = base * factor;
 
-            //clampt o ranges
             if (i == W_EDGE_HUNT_BIAS) {
                 if (mutated < 0.0) mutated = 0.0;
                 if (mutated > 5.0) mutated = 5.0;
@@ -296,25 +293,25 @@ private:
         int ts = std::max(st.timesStuck, internalTimesStuck);
         reward -= ts * 2.0;
 
-        //deprecated death penaltis
+        //deprecated
         /*if (deathBucket == 1) reward -= 300.0;//pit
         else if (deathBucket == 2) reward -= 500.0;
 
         if (st.diedByRail) {
             reward -= 900.0;
             }*/
-        //refactored death-type penalties
+        //d-p
         switch (deathBucket) {
-            case 1://pit
+            case 1://p-t
                 reward -= 300.0;
                 break;
-            case 2://flame trap
+            case 2://f-t
                 reward -= 800.0;
                 break;
-            case 3://other robot(not on trap tile)
+            case 3://o-r
                 reward -= 2500.0;
                 break;
-            default: //alive
+            default: //a
                 break;
         }
 
@@ -324,7 +321,6 @@ private:
     }
 
     // ===============BRAIN=============================================
-
     std::vector<std::pair<int,int>> last_seen_this_turn;
     int locked_dir = 0;
     int sweep_idx = 1;
@@ -339,7 +335,7 @@ private:
     std::vector<std::vector<int>> flameLastSeenTurn;
 
     bool memoryInitialized = false;
-    std::vector<std::vector<char>> terrainMemory; // '.', 'M','P','F','X'
+    std::vector<std::vector<char>> terrainMemory;
     std::vector<std::vector<bool>> enemyEverSeen;
 
     static int s_modeMoveCount[9];
@@ -453,11 +449,11 @@ private:
         /*if (t == 'M' || t == 'X' || t == 'P' || t == 'F') {
             return 900'000;
         }*/
-        if (t == 'P' || t == 'F') {//forbidden
+        if (t == 'P' || t == 'F') {
             return 1'000'000;
         }
 
-        if (t == 'M' || t == 'X') {//very bad
+        if (t == 'M' || t == 'X') {
             return 900'000;
         }
 
@@ -471,11 +467,11 @@ private:
             score += int(8000 * s_weights[W_UNKNOWN_TILE]);
         }
 
-        if (t == 'F') {//deprecated but keeping
+        if (t == 'F') {//deprecated
             score += int(100'000 * s_weights[W_FLAME_TILE]);
         }
 
-        if (t == 'P') {//deprecated but keeping
+        if (t == 'P') {//deprecated
             score += int(100'000 * s_weights[W_PIT_TILE]);
         }
 
@@ -509,7 +505,7 @@ private:
             score += int((20 - d) * 80 * s_weights[W_ENEMY_PROX]);
         }
 
-        //edge-bias
+        //e-b
         if (m_board_row_max > 0 && m_board_col_max > 0) {
             int rmax = m_board_row_max - 1;
             int cmax = m_board_col_max - 1;
@@ -873,7 +869,7 @@ private:
                                 }
 
 public:
-    Robot_Reaper(): RobotBase(/*move*/2, /*armor*/5, /*weapon*/railgun) {
+    Robot_Reaper(): RobotBase(2,5,railgun) {
         initWeightsIfNeeded();
     }
 
@@ -921,19 +917,16 @@ public:
 
 
     void get_radar_direction(int& radar_direction) override {
-        //If we have a live lock, keep it.
         if (locked_dir != 0) {
             radar_direction = locked_dir;
             return;
         }
 
-        //Otherwise, scan the direction we moved last turn (look ahead).
         if (last_move_dir != 0) {
             radar_direction = last_move_dir;
             return;
         }
 
-        //Fallback: sweep.
         if (sweep_idx < 1 || sweep_idx > 8) sweep_idx = 1;
         radar_direction = sweep_idx;
         sweep_idx = (sweep_idx % 8) + 1;
@@ -1145,7 +1138,7 @@ public:
         }
 
         if (!last_seen_this_turn.empty()) {
-            enemyThreatMemory = 3; //3turn memory
+            enemyThreatMemory = 3;
         } else if (enemyThreatMemory > 0) {
             --enemyThreatMemory;
         }
@@ -1245,12 +1238,10 @@ public:
                             hasAlignedNew = hasAlignedNew || alignedNew;
                         }
 
-                        //further from enemy bias
                         if (bestLiveDistNew > bestLiveDistNow) {
                             extra -= 500 * (bestLiveDistNew - bestLiveDistNow);
                         }
 
-                        //expensive to break LOS
                         if (hasAlignedNow && !hasAlignedNew) {
                             //extra += 4000;
                             int losBonus = currentRailThreat ? 8000 : 4000;
@@ -1258,7 +1249,6 @@ public:
                         }
                     }
 
-                    //avoid going opoposite of last move
                     if (last_move_dir != 0 && d != 0) {
                         int opposite = (last_move_dir + 4 - 1) % 8 + 1;
                         if (d == opposite) {
@@ -1267,7 +1257,6 @@ public:
                     }
                     
 
-                    //avoid stepping back into the immediately previous tile
                     if (fr == last_r && fc == last_c) {
                         extra += 3000;
                     }
