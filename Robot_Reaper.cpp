@@ -18,8 +18,8 @@
  *
  * Robot_Reaper.cpp
  * -----------------
- * Reaper is an intentionally under-documented, highly ambitious self-learning AI
- * for the RobotWars 'Battle Royale'.
+ * Reaper is an intentionally under-documented, ambitious & simple self-learning bot
+ * for 'RobotWars'.
  *
  * DESIGN INTENT
  * -------------
@@ -30,8 +30,8 @@
  *   - Adapts over time using a crude hill-climbing / evolutionary tuning loop
  *     on those heuristic weights, based on game-level rewards.
  *
- * OBFUSCATION BY DESIGN
- * ----------------------
+ * OBFUSCATION IS BY DESIGN
+ * ------------------------
  * This file is deliberately light on inline comments, highly factored,
  * and somewhat opaque by construction. The goal is to make the overall
  * strategy difficult to reverse-engineer or trivially copy for other
