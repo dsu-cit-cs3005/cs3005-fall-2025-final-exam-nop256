@@ -1429,7 +1429,7 @@ public:
 
 double Robot_Reaper::s_weights[Robot_Reaper::WEIGHT_COUNT];
 double Robot_Reaper::s_bestWeights[Robot_Reaper::WEIGHT_COUNT];
-double Robot_Reaper::s_bestReward = -1e18;
+double Robot_Reaper::s_bestReward = 2668;
 bool   Robot_Reaper::s_weightsInitialized = false;
 
 int Robot_Reaper::s_totalGames       = 0;
