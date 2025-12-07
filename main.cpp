@@ -9,6 +9,7 @@ extern "C" RobotBase* create_robot_rat();       //ratboy bot
 extern "C" RobotBase* create_robot_hammer();    //hammer bot
 extern "C" RobotBase* create_robot_grenadier(); //grenadier bot
 extern "C" RobotBase* create_robot_sniper();    //sniper bot
+extern "C" RobotBase* create_robot_cornersniper();    //corner sniper bot
 
 struct RobotSpec {
     RobotFactory factory;
@@ -35,6 +36,7 @@ int main(int argc, char** argv) {
             { create_robot_hammer,   "Hammer",   'R', 7 },
             { create_robot_grenadier,"Grenadier",'R', 3 },
             { create_robot_sniper,   "Sniper",   'R', 5 },
+            { create_robot_cornersniper,"Corner",'C', 1 },
         };
 
         for (const auto& spec : specs) {
@@ -44,7 +46,7 @@ int main(int argc, char** argv) {
                 arena.addRobotRandom(bot, name, spec.symbol);
             }
         }
-            arena.run(0);
+            arena.run(90);
         }
     return 0;
 }

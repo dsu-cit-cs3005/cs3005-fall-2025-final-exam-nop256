@@ -1,3 +1,9 @@
 *.so
 *.o
 *.swp
+*.csv
+reaper_stats.csv
+reaper_only_stats.csv
+realer_learning_log.csv
+RobotWarz
+RobotWarz.exe

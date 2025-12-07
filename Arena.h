@@ -12,6 +12,7 @@ struct RobotEntry {
     std::string name;
     char weaponGlyph{'R'};  // 'R','F','H','G', etc
     char idGlyph{'?'};      // special identifier !@#$%^&*
+    std::string idTag;
     int r{0}, c{0};
     bool alive{true};
     int shotsFired{0};

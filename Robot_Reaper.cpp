@@ -59,28 +59,28 @@ private:
     //static constexpr int SAVE_INTERVAL = 50;
 
     static void loadDefaultWeights() {
-        s_bestReward = -1e18;
+        s_bestReward = 3120.8;
 
         const double tuned[WEIGHT_COUNT] = {
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            0.0,
-            1
+            2.83017,
+            0.880417,
+            0.35478,
+            0.670344,
+            1.1691,
+            0.870965,
+            1.20466,
+            1.81552,
+            1.40586,
+            0.306014,
+            0.520894,
+            0.830745,
+            0.385688,
+            0.78407,
+            1.33433,
+            3.00803,
+            0.571026,
+            1.5,
+            1.2568
         };
 
         for (int i = 0; i < WEIGHT_COUNT; ++i) {
@@ -113,7 +113,7 @@ private:
                 s_bestWeights[i] = vals[i];
                 s_weights[i]     = vals[i];
             }
-            s_bestReward = -1e18; 
+            s_bestReward = 3120.8; 
         } else {
             //fvall back to defauls
             loadDefaultWeights();
@@ -146,6 +146,9 @@ private:
 
         for (int i = 0; i < WEIGHT_COUNT; ++i) {
             double base = s_weights[i];
+            if (i == W_EDGE_HUNT_BIAS && base <= 0.0) {
+                base = 0.2; //non-zero seed
+            }
             double factor = 1.0 + noise(rng);
             double mutated = base * factor;
 
@@ -173,7 +176,7 @@ private:
         int  roundsSurvived = 0;
         int  timesStuck = 0;
         bool valid = false;
-        bool diedByRail = false;
+        //bool diedByRail = false;
     };
 
     static bool parseReaperRow(const std::string& line, ReaperStatsRow& row) {
@@ -293,12 +296,29 @@ private:
         int ts = std::max(st.timesStuck, internalTimesStuck);
         reward -= ts * 2.0;
 
-        if (deathBucket == 1) reward -= 300.0;//pit
+        //deprecated death penaltis
+        /*if (deathBucket == 1) reward -= 300.0;//pit
         else if (deathBucket == 2) reward -= 500.0;
 
         if (st.diedByRail) {
             reward -= 900.0;
-            }
+            }*/
+        //refactored death-type penalties
+        switch (deathBucket) {
+            case 1://pit
+                reward -= 300.0;
+                break;
+            case 2://flame trap
+                reward -= 800.0;
+                break;
+            case 3://other robot(not on trap tile)
+                reward -= 2500.0;
+                break;
+            default: //alive
+                break;
+        }
+
+
 
         return reward;
     }
@@ -351,7 +371,7 @@ private:
 
     bool isFlamerZone(int r, int c) const {
         if (!memoryInitialized) return false;
-        int radius = 4;
+        int radius = 0;//was 4
         const int FLAME_TTL = 9999999;
 
         for (int dr = -radius; dr <= radius; ++dr) {
@@ -430,7 +450,14 @@ private:
 
         char t = terrainMemory[r][c];
 
-        if (t == 'M' || t == 'X' || t == 'P' || t == 'F') {
+        /*if (t == 'M' || t == 'X' || t == 'P' || t == 'F') {
+            return 900'000;
+        }*/
+        if (t == 'P' || t == 'F') {//forbidden
+            return 1'000'000;
+        }
+
+        if (t == 'M' || t == 'X') {//very bad
             return 900'000;
         }
 
@@ -441,14 +468,14 @@ private:
         }
 
         if (t == '?') {
-            score += int(2000 * s_weights[W_UNKNOWN_TILE]);
+            score += int(8000 * s_weights[W_UNKNOWN_TILE]);
         }
 
-        if (t == 'F') {
+        if (t == 'F') {//deprecated but keeping
             score += int(100'000 * s_weights[W_FLAME_TILE]);
         }
 
-        if (t == 'P') {
+        if (t == 'P') {//deprecated but keeping
             score += int(100'000 * s_weights[W_PIT_TILE]);
         }
 
@@ -482,7 +509,7 @@ private:
             score += int((20 - d) * 80 * s_weights[W_ENEMY_PROX]);
         }
 
-        //e-b
+        //edge-bias
         if (m_board_row_max > 0 && m_board_col_max > 0) {
             int rmax = m_board_row_max - 1;
             int cmax = m_board_col_max - 1;
@@ -574,6 +601,13 @@ private:
 
         return s;
     }
+
+    bool isKnownTrap(int r, int c) const {
+        if (!memoryInitialized || !inBounds(r, c)) return false;
+        char t = terrainMemory[r][c];
+        return (t == 'P' || t == 'F');
+    }
+
 
     void chooseHuntCorner(int& targetRow, int& targetCol) const {
         targetRow = -1;
@@ -726,7 +760,7 @@ private:
 
                                             for (const auto& p : recentPositions) {
                                                 if (p.first == fr && p.second == fc) {
-                                                    total += int(80'000 * s_weights[W_RECENT_POS_PENALTY]);
+                                                    total += int(300'000 * s_weights[W_RECENT_POS_PENALTY]);//was 80'000
                                                     break;
                                                 }
                                             }
@@ -764,7 +798,7 @@ private:
                                     char t = terrainMemory[cr][cc];
 
                                     if (t == 'P') return DB_PIT;
-                                    if (t == 'F' || isFlamerZone(cr, cc)) return DB_FLAME;
+                                    if (t == 'F') return DB_FLAME;
 
                                     return DB_OTHER;
                                 }
@@ -839,7 +873,7 @@ private:
                                 }
 
 public:
-    Robot_Reaper(): RobotBase(/*move*/4, /*armor*/3, /*weapon*/railgun) {
+    Robot_Reaper(): RobotBase(/*move*/2, /*armor*/5, /*weapon*/railgun) {
         initWeightsIfNeeded();
     }
 
@@ -887,19 +921,25 @@ public:
 
 
     void get_radar_direction(int& radar_direction) override {
-        int cr,cc;
-        get_current_location(cr,cc);
-
+        //If we have a live lock, keep it.
         if (locked_dir != 0) {
             radar_direction = locked_dir;
-        } else if (last_move_dir != 0) {
-            radar_direction = last_move_dir;
-        } else {
-            if (sweep_idx < 1 || sweep_idx > 8) sweep_idx = 1;
-            radar_direction = sweep_idx;
-            sweep_idx = (sweep_idx % 8) + 1;
+            return;
         }
+
+        //Otherwise, scan the direction we moved last turn (look ahead).
+        if (last_move_dir != 0) {
+            radar_direction = last_move_dir;
+            return;
+        }
+
+        //Fallback: sweep.
+        if (sweep_idx < 1 || sweep_idx > 8) sweep_idx = 1;
+        radar_direction = sweep_idx;
+        sweep_idx = (sweep_idx % 8) + 1;
     }
+
+
 
     void process_radar_results(const std::vector<RadarObj>& radar_results) override {
         ensureMemory();
@@ -1095,7 +1135,7 @@ public:
         bool damageThreat = (damagePanicTurns > 0);
 
         recentPositions.push_back({cr, cc});
-        if (recentPositions.size() > 10) {
+        if (recentPositions.size() > 15) {
             recentPositions.erase(recentPositions.begin());
         }
 
@@ -1121,6 +1161,9 @@ public:
         }
 
         //bool hereIsFlamerZone = isFlamerZone(cr, cc);
+        bool hereIsFlamerZone = isFlamerZone(cr, cc)
+                      || (memoryInitialized && inBounds(cr, cc)
+                          && terrainMemory[cr][cc] == 'F');
         bool currentRailThreat = (locked_dir != 0 && liveThreatDir[locked_dir] > 0);
         bool escapeMode = (closeThreat || currentRailThreat || damageThreat);
 
@@ -1153,12 +1196,30 @@ public:
 
                     if (!inBounds(fr, fc)) break;
 
+                    bool pathHitsTrap = false;
+                    int tr = cr;
+                    int tc = cc;
+                    for (int step = 1; step <= k; ++step) {
+                        tr += dirs[d].first;
+                        tc += dirs[d].second;
+                        if (!inBounds(tr, tc)) { pathHitsTrap = true; break; }
+
+                        if (isKnownTrap(tr, tc)) {
+                            pathHitsTrap = true;
+                            break;
+                        }
+                    }
+                    if (pathHitsTrap) {
+                        continue;
+                    }
+
                     int baseRisk = scorePathRisk(cr, cc, d, k);
                     if (baseRisk >= 1'000'000) {
                         break;
                     }
 
                     int extra = 0;
+
 
                     if (!last_seen_this_turn.empty()) {
                         int bestLiveDistNow = 1000;
@@ -1191,19 +1252,32 @@ public:
 
                         //expensive to break LOS
                         if (hasAlignedNow && !hasAlignedNew) {
-                            extra += 4000;
+                            //extra += 4000;
+                            int losBonus = currentRailThreat ? 8000 : 4000;
+                            extra -= losBonus;
                         }
                     }
 
+                    //avoid going opoposite of last move
                     if (last_move_dir != 0 && d != 0) {
                         int opposite = (last_move_dir + 4 - 1) % 8 + 1;
                         if (d == opposite) {
                             extra += 2000;
                         }
                     }
+                    
 
+                    //avoid stepping back into the immediately previous tile
                     if (fr == last_r && fc == last_c) {
                         extra += 3000;
+                    }
+
+
+                    for (const auto& p : recentPositions) {
+                        if (p.first == fr && p.second == fc) {
+                            extra += int(80'000 * s_weights[W_RECENT_POS_PENALTY]);
+                            break;
+                        }
                     }
 
                     int total = baseRisk + extra;
@@ -1229,7 +1303,7 @@ public:
             ++s_knownBucketCount[kb];
 
             if (closeThreat)      { ++escapeCauseCloseThreat; ++s_escapeCauseCloseThreat; }
-            //if (hereIsFlamerZone) { ++escapeCauseFlamer;      ++s_escapeCauseFlamer;      }
+            if (hereIsFlamerZone) { ++escapeCauseFlamer;      ++s_escapeCauseFlamer;      }
             if (currentRailThreat){ ++escapeCauseRail;        ++s_escapeCauseRail;        }
             if (damageThreat)     { ++escapeCauseDamage;      ++s_escapeCauseDamage;      }
 
@@ -1332,7 +1406,7 @@ public:
 
 double Robot_Reaper::s_weights[Robot_Reaper::WEIGHT_COUNT];
 double Robot_Reaper::s_bestWeights[Robot_Reaper::WEIGHT_COUNT];
-double Robot_Reaper::s_bestReward = -1e18;
+double Robot_Reaper::s_bestReward = 3120.8;
 bool   Robot_Reaper::s_weightsInitialized = false;
 
 int Robot_Reaper::s_totalGames       = 0;
