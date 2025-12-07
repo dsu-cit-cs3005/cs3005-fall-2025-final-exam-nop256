@@ -1,3 +1,4 @@
+//Robot_Reaper.cpp
 #include "RobotBase.h"
 #include <vector>
 #include <cmath>
@@ -10,6 +11,39 @@
 #include <iostream>
 #include <cstdlib>
 //#include "Logger.h"
+
+
+
+/************************************************************************************
+ *
+ * Robot_Reaper.cpp
+ * -----------------
+ * Reaper is an intentionally under-documented, highly ambitious self-learning AI
+ * for the RobotWars 'Battle Royale'.
+ *
+ * DESIGN INTENT
+ * -------------
+ * This robot implements a fairly complex “mini-AI” brain architecture:
+ *   - Maintains a persistent world model (terrain + enemy memory).
+ *   - Uses multiple behavior modes (escape / explore / hunt / reposition / drift).
+ *   - Evaluates tiles and paths via weighted perturbation heuristic scoring.
+ *   - Adapts over time using a crude hill-climbing / evolutionary tuning loop
+ *     on those heuristic weights, based on game-level rewards.
+ *
+ * OBFUSCATION BY DESIGN
+ * ----------------------
+ * This file is deliberately light on inline comments, highly factored,
+ * and somewhat opaque by construction. The goal is to make the overall
+ * strategy difficult to reverse-engineer or trivially copy for other
+ * submissions, while still remaining valid, buildable C++.
+ *
+ * In short: this is a self-learning, heuristic-driven bot with
+ * a sophisticated decision pipeline and minimal explanatory breadcrumbs.
+ *
+ ************************************************************************************/
+
+
+
 
 namespace {
     std::ofstream& reaper_log() {
@@ -58,28 +92,28 @@ private:
     //static constexpr int SAVE_INTERVAL = 50;
 
     static void loadDefaultWeights() {
-        s_bestReward = 3120.8;
+        s_bestReward = 2668;
 
         const double tuned[WEIGHT_COUNT] = {
-            2.83017,
-            0.880417,
-            0.35478,
-            0.670344,
-            1.1691,
-            0.870965,
-            1.20466,
-            1.81552,
-            1.40586,
-            0.306014,
-            0.520894,
-            0.830745,
-            0.385688,
-            0.78407,
-            1.33433,
-            3.00803,
-            0.571026,
-            1.5,
-            1.2568
+            0.492454,
+            1.18268,
+            0.644735,
+            0.665551,
+            0.553044,
+            1.04004,
+            2.00726,
+            0.596559,
+            1.97952,
+            1.00502,
+            1.19698,
+            0.913179,
+            1.05645,
+            0.961263,
+            2.63869,
+            0.67556,
+            1.31753,
+            0.370601,
+            0.574541
         };
 
         for (int i = 0; i < WEIGHT_COUNT; ++i) {
@@ -173,7 +207,7 @@ private:
         int  roundsSurvived = 0;
         int  timesStuck = 0;
         bool valid = false;
-        //bool diedByRail = false;
+        //bool diedByRail = false; //deprecated
     };
 
     static bool parseReaperRow(const std::string& line, ReaperStatsRow& row) {
@@ -1395,7 +1429,7 @@ public:
 
 double Robot_Reaper::s_weights[Robot_Reaper::WEIGHT_COUNT];
 double Robot_Reaper::s_bestWeights[Robot_Reaper::WEIGHT_COUNT];
-double Robot_Reaper::s_bestReward = 3120.8;
+double Robot_Reaper::s_bestReward = -1e18;
 bool   Robot_Reaper::s_weightsInitialized = false;
 
 int Robot_Reaper::s_totalGames       = 0;
