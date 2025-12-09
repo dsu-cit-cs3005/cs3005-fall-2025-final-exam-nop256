@@ -57,7 +57,7 @@ namespace {
 class Robot_Reaper : public RobotBase {
 
 private:
-    static constexpr int WEIGHT_COUNT = 19;
+    static constexpr int WEIGHT_COUNT = 20;
     enum WeightIndex {
         W_FLAME_TILE = 0,
         W_PIT_TILE,
@@ -77,7 +77,8 @@ private:
         W_BACKTRACK_PENALTY,
         W_RECENT_POS_PENALTY,
         W_EDGE_HUNT_BIAS,
-        W_DAMAGE_PANIC_BOOST
+        W_DAMAGE_PANIC_BOOST,
+        W_AGGRESSION
     };
 
     static double s_weights[WEIGHT_COUNT];
@@ -89,31 +90,35 @@ private:
     static int    s_totalFlameDeaths;
     static int    s_totalOtherDeaths;
     static int    s_totalAliveEnd;
+    static int    s_trialsOnCurrentWeights;
+    static double s_accumulatedReward;
+    static double s_mutationSigma;
+    static std::mt19937 s_rng;
     //static constexpr int SAVE_INTERVAL = 50;
 
     static void loadDefaultWeights() {
-        s_bestReward = 2668;
+        s_bestReward = -1e8;
 
         const double tuned[WEIGHT_COUNT] = {
-            0.492454,
-            1.18268,
-            0.644735,
-            0.665551,
-            0.553044,
-            1.04004,
-            2.00726,
-            0.596559,
-            1.97952,
-            1.00502,
-            1.19698,
-            0.913179,
-            1.05645,
-            0.961263,
-            2.63869,
-            0.67556,
-            1.31753,
-            0.370601,
-            0.574541
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
         };
 
         for (int i = 0; i < WEIGHT_COUNT; ++i) {
@@ -174,7 +179,7 @@ private:
 
     static void mutateWeights() {
         static std::mt19937 rng{std::random_device{}()};
-        std::normal_distribution<double> noise(0.0, 0.20); // 20% std
+        std::normal_distribution<double> noise(0.0, s_mutationSigma); // 20% std
 
         for (int i = 0; i < WEIGHT_COUNT; ++i) {
             double base = s_weights[i];
@@ -315,9 +320,17 @@ private:
 
     static double computeReward(const ReaperStatsRow& st,
                                 int deathBucket,
-                                int internalTimesStuck)
+                                int internalTimesStuck,
+                                double knownFrac)
     {
         double reward = 0.0;
+
+        double accuracy = (st.shotsFired > 0) ? (double)st.shotsHit / st.shotsFired : 0.0;
+        reward += 150.0 * accuracy;
+
+        double coverageBonus = knownFrac * 100.0;
+        reward += coverageBonus;
+
         reward += st.kills       * 200.0;
         reward += st.damageDealt *  2.0;
         reward -= st.damageTaken *  1.0;
@@ -327,14 +340,6 @@ private:
         int ts = std::max(st.timesStuck, internalTimesStuck);
         reward -= ts * 2.0;
 
-        //deprecated
-        /*if (deathBucket == 1) reward -= 300.0;//pit
-        else if (deathBucket == 2) reward -= 500.0;
-
-        if (st.diedByRail) {
-            reward -= 900.0;
-            }*/
-        //d-p
         switch (deathBucket) {
             case 1://p-t
                 reward -= 300.0;
@@ -558,6 +563,16 @@ private:
             }
         }
         int s = scoreTile(r, c);
+
+        for (auto [er, ec] : last_seen_this_turn) {
+            int dr = er - r;
+            int dc = ec - c;
+            bool aligned = (dr == 0) || (dc == 0) || (std::abs(dr) == std::abs(dc));
+            if (aligned) {
+                s += int(5000 * s_weights[W_DANGERLINE]);
+                break;
+            }
+        }
 
         if (!last_seen_this_turn.empty()) {
             int minLive = 1000;
@@ -929,24 +944,59 @@ public:
             else if (b == DB_FLAME) bucketInt = 2;
             else if (b == DB_ALIVE) bucketInt = 0;
 
-            double reward = computeReward(st, bucketInt, timesStuck);
-
+            double knownFrac = mapKnownFraction();
+            double reward = computeReward(st, bucketInt, timesStuck, knownFrac);
             logLearningRow(m_name, st, reward);
 
-            if (reward > s_bestReward) {
-                s_bestReward = reward;
-                for (int i = 0; i < WEIGHT_COUNT; ++i) {
-                    s_bestWeights[i] = s_weights[i];
+            s_accumulatedReward += reward;
+            ++s_trialsOnCurrentWeights;
+
+            const int TRIALS_PER_GENERATION = 5;
+
+            if (s_trialsOnCurrentWeights >= TRIALS_PER_GENERATION) {
+                double avgReward = s_accumulatedReward / s_trialsOnCurrentWeights;
+
+                double diff   = avgReward - s_bestReward;
+                bool   accept = false;
+
+                if (s_bestReward < -1e7) {
+                    accept = true;
+                } else if (diff > 0.0) {
+                    accept = true;
+                } else if (diff > -200.0) {
+                    std::uniform_real_distribution<double> dist(0.0, 1.0);
+                    double p = std::exp(diff / 200.0);
+                    if (dist(s_rng) < p) {
+                        accept = true;
+                    }
                 }
-                saveBestWeightsToFile();
-            } else {
-                for (int i = 0; i < WEIGHT_COUNT; ++i) {
-                    s_weights[i] = s_bestWeights[i];
+
+                if (accept) {
+                    s_bestReward = avgReward;
+                    for (int i = 0; i < WEIGHT_COUNT; ++i) {
+                        s_bestWeights[i] = s_weights[i];
+                    }
+
+                    s_mutationSigma = std::max(0.05, s_mutationSigma * 0.9);
+
+                    saveBestWeightsToFile();
+                } else {
+                    for (int i = 0; i < WEIGHT_COUNT; ++i) {
+                        s_weights[i] = s_bestWeights[i];
+                    }
+
+                    s_mutationSigma = std::min(0.40, s_mutationSigma * 1.05);
                 }
+
+                s_accumulatedReward      = 0.0;
+                s_trialsOnCurrentWeights = 0;
+
+                mutateWeights();
             }
-            mutateWeights();
+
         }
     }
+
 
 
 
@@ -1349,6 +1399,7 @@ public:
         bool   exploreMode    = (knownFrac < 0.3);
         bool   huntMode       = false;
         bool   repositionMode = false;
+        double aggression = s_weights[W_AGGRESSION];
 
         auto bucketKnownFrac = [&](double k) {
             if (k < 0.10) return 0;
@@ -1356,7 +1407,8 @@ public:
             return 2;
         };
 
-        if (turnsSinceLastSeen > 5 && knownFrac >= 0.3) {
+
+        if (turnsSinceLastSeen > (5.0 / std::max(0.25, aggression)) && knownFrac >= 0.3) {
             huntMode = true;
         }
 
@@ -1429,7 +1481,7 @@ public:
 
 double Robot_Reaper::s_weights[Robot_Reaper::WEIGHT_COUNT];
 double Robot_Reaper::s_bestWeights[Robot_Reaper::WEIGHT_COUNT];
-double Robot_Reaper::s_bestReward = 2668;
+double Robot_Reaper::s_bestReward = -1e8;
 bool   Robot_Reaper::s_weightsInitialized = false;
 
 int Robot_Reaper::s_totalGames       = 0;
@@ -1448,5 +1500,11 @@ int Robot_Reaper::s_escapeCauseRail        = 0;
 int Robot_Reaper::s_escapeCauseDamage      = 0;
 
 int Robot_Reaper::s_knownBucketCount[3] = {0};
+
+int    Robot_Reaper::s_trialsOnCurrentWeights = 0;
+double Robot_Reaper::s_accumulatedReward      = 0.0;
+
+std::mt19937 Robot_Reaper::s_rng{std::random_device{}()};
+double       Robot_Reaper::s_mutationSigma = 0.25;
 
 extern "C" RobotBase* create_robot(){return new Robot_Reaper();}
