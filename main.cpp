@@ -10,8 +10,8 @@ extern "C" RobotBase* create_robot_hammer();    //hammer bot
 extern "C" RobotBase* create_robot_grenadier(); //grenadier bot
 extern "C" RobotBase* create_robot_sniper();    //sniper bot
 extern "C" RobotBase* create_robot_cornersniper();    //corner sniper bot
-extern "C" RobotBase* create_robot_tune();      //tune?
-extern "C" RobotBase* create_robot_bob();       //bob
+//extern "C" RobotBase* create_robot_tune();      //tune?
+//extern "C" RobotBase* create_robot_bob();       //bob
 
 struct RobotSpec {
     RobotFactory factory;
@@ -39,8 +39,8 @@ int main(int argc, char** argv) {
             { create_robot_grenadier,"Grenadier",'R', 3 },
             { create_robot_sniper,   "Sniper",   'R', 5 },
             { create_robot_cornersniper,"Corner",'C', 1 },
-            { create_robot_tune,     "Tune",     'T', 1 },
-            { create_robot_bob,      "Bob",      'B', 1 },
+//            { create_robot_tune,     "Tune",     'T', 1 },
+//            { create_robot_bob,      "Bob",      'B', 1 },
         };
 
         for (const auto& spec : specs) {
